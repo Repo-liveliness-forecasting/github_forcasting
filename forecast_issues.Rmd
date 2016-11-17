@@ -1,0 +1,28 @@
+---
+title: "Forcasting issues"
+author: "Forcast Padawan 2"
+date: "November 17, 2016"
+output: html_document
+---
+
+The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that sthis could help Open Source organisation to manage there human ressources.
+
+```{r results='hide', message=FALSE, warning=FALSE}
+#install.packages('forecast')
+library('forecast')
+#load the data frame
+issues.csv <- read.csv("issues/julialang_julia.csv")
+commits.csv <- read.csv("commits/julialang_julia.csv")
+
+issues.csv$date = as.Date(issues.csv$date,format='%m/%d/%Y')
+commits.csv$date = as.Date(commits.csv.csv$date,format='%m/%d/%Y')
+```
+
+```{r}
+#loading issue into a ts object
+issues.ts <- ts(issues.csv$number_of_issues, 
+                start=c(as.numeric(format(issues.csv$date[[1]], '%Y')), as.numeric(format(issues.csv$date[[1]], '%j'))), 
+                end=c(as.numeric(format(issues.csv$date[[length(issues.csv$date)]], '%Y')), as.numeric(format(issues.csv$date[[length(issues.csv$date)]], '%j'))), 
+                freq=365) 
+plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
+```
