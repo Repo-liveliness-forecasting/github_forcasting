@@ -7,6 +7,8 @@ output: html_document
 
 The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that sthis could help Open Source organisation to manage there human ressources.
 
+# Load the data
+
 ```{r results='hide', message=FALSE, warning=FALSE}
 #install.packages('forecast')
 library('forecast')
@@ -15,14 +17,55 @@ issues.csv <- read.csv("issues/julialang_julia.csv")
 commits.csv <- read.csv("commits/julialang_julia.csv")
 
 issues.csv$date = as.Date(issues.csv$date,format='%m/%d/%Y')
-commits.csv$date = as.Date(commits.csv.csv$date,format='%m/%d/%Y')
+commits.csv$date = as.Date(commits.csv$date,format='%m/%d/%Y')
 ```
 
 ```{r}
-#loading issue into a ts object
+#loading issues and commits into a ts object
 issues.ts <- ts(issues.csv$number_of_issues, 
                 start=c(as.numeric(format(issues.csv$date[[1]], '%Y')), as.numeric(format(issues.csv$date[[1]], '%j'))), 
                 end=c(as.numeric(format(issues.csv$date[[length(issues.csv$date)]], '%Y')), as.numeric(format(issues.csv$date[[length(issues.csv$date)]], '%j'))), 
                 freq=365) 
+
+commits.ts <- ts(commits.csv$number_of_commits, 
+                start=c(as.numeric(format(commits.csv$date[[1]], '%Y')), as.numeric(format(commits.csv$date[[1]], '%j'))), 
+                end=c(as.numeric(format(commits.csv$date[[length(commits.csv$date)]], '%Y')), as.numeric(format(commits.csv$date[[length(commits.csv$date)]], '%j'))), 
+                freq=365) 
 plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
+plot(commits.ts, main = 'Commits', bty = 'l', ylab = 'Number of Commits')
 ```
+
+```{r}
+time <- time(issues.ts)
+
+n.valid <- 21
+n.train <- length(issues.ts) - n.valid
+
+train.issues.ts <- window(issues.ts, start=time[1], end=time[n.train])
+valid.issues.ts <- window(issues.ts, 
+                   start=time[n.train+1], 
+                   end=time[n.train+n.valid])
+```
+
+# Naive Forecast
+
+## Naive
+
+```{r}
+naive.m <- naive(train.issues.ts, h=n.valid)
+accuracy(naive.m, valid.issues.ts)
+hist(valid.issues.ts - naive.m$mean)
+plot(naive.m)
+lines(valid.issues.ts)
+```
+
+## Seasonal Naive
+
+```{r}
+snaive.m <- snaive(train.issues.ts, h=n.valid)
+accuracy(snaive.m, valid.issues.ts)
+hist(valid.issues.ts - snaive.m$mean)
+plot(snaive.m)
+lines(valid.issues.ts)
+```
+
