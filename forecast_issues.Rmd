@@ -16,25 +16,26 @@ library('forecast')
 issues.csv <- read.csv("issues/julialang_julia.csv")
 commits.csv <- read.csv("commits/julialang_julia.csv")
 
-issues.csv$date = as.Date(issues.csv$date,format='%m/%d/%Y')
-commits.csv$date = as.Date(commits.csv$date,format='%m/%d/%Y')
+issues.csv$date = as.POSIXlt(as.Date(issues.csv$date,format='%m/%d/%Y'))
+commits.csv$date = as.POSIXlt(as.Date(commits.csv$date,format='%m/%d/%Y'))
+```
+
+keep the last 12 months
+
+```{r}
+to_date <- issues.csv$date[length(issues.csv$date)]
+from_date <- to_date
+from_date$year <- from_date$year - 1
+
+issues.csv <- subset(issues.csv, date <= to_date & date >= from_date)
+commits.csv <- subset(commits.csv, date <= to_date & date >= from_date)
 ```
 
 ```{r}
 #loading issues and commits into a ts object
-issues.ts <- ts(issues.csv$number_of_issues, 
-                start=c(as.numeric(format(issues.csv$date[[1]],'%Y')), 
-                        as.numeric(format(issues.csv$date[[1]],'%j'))), 
-                end=c(as.numeric(format(issues.csv$date[[length(issues.csv$date)]],'%Y')), 
-                      as.numeric(format(issues.csv$date[[length(issues.csv$date)]],'%j'))), 
-                freq=365) 
+issues.ts <- ts(issues.csv$number_of_issues, frequency = 7) 
 
-commits.ts <- ts(commits.csv$number_of_commits, 
-                 start=c(as.numeric(format(commits.csv$date[[1]],'%Y')), 
-                         as.numeric(format(commits.csv$date[[1]],'%j'))), 
-                 end=c(as.numeric(format(commits.csv$date[[length(commits.csv$date)]],'%Y')), 
-                      as.numeric(format(commits.csv$date[[length(commits.csv$date)]],'%j'))), 
-                 freq=365) 
+commits.ts <- ts(commits.csv$number_of_commits, frequency = 7) 
 plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
 plot(commits.ts, main = 'Commits', bty = 'l', ylab = 'Number of Commits')
 ```
@@ -56,20 +57,68 @@ valid.issues.ts <- window(issues.ts,
 ## Naive
 
 ```{r}
-naive.m <- naive(train.issues.ts, h=n.valid)
-accuracy(naive.m, valid.issues.ts)
-hist(valid.issues.ts - naive.m$mean)
-plot(naive.m)
+train.issues.naive.pred <- naive(train.issues.ts, h=n.valid)
+accuracy(train.issues.naive.pred, valid.issues.ts)
+hist(valid.issues.ts - train.issues.naive.pred$mean)
+plot(valid.issues.ts - train.issues.naive.pred$mean)
+plot(train.issues.naive.pred)
 lines(valid.issues.ts)
 ```
 
 ## Seasonal Naive
 
 ```{r}
-snaive.m <- snaive(train.issues.ts, h=n.valid)
-accuracy(snaive.m, valid.issues.ts)
-hist(valid.issues.ts - snaive.m$mean)
-plot(snaive.m)
+train.issues.snaive.pred <- snaive(train.issues.ts, h=n.valid)
+accuracy(train.issues.snaive.pred, valid.issues.ts)
+hist(valid.issues.ts - train.issues.snaive.pred$mean)
+plot(valid.issues.ts - train.issues.snaive.pred$mean)
+plot(train.issues.snaive.pred)
 lines(valid.issues.ts)
 ```
 
+# Smoothing
+
+## Holt Winter
+
+```{r}
+train.issues.hw.pred <- hw(train.issues.ts, hw = "ZAA", h = n.valid)
+accuracy(train.issues.hw.pred, valid.issues.ts)
+hist(valid.issues.ts - train.issues.hw.pred$mean)
+plot(valid.issues.ts - train.issues.hw.pred$mean)
+plot(train.issues.hw.pred)
+lines(valid.issues.ts)
+```
+
+## Double differencing
+
+```{r}
+train.issues.d1 <- diff(train.issues.ts, lag = 1)
+train.issues.d1.d7 <- diff(train.issues.d1, lag = 7)
+
+ma.trailing <- rollmean(train.issues.d1.d7, k = 7, align = "right")
+last.ma <- tail(ma.trailing, 1)
+ma.trailing.pred <- ts(c(train.issues.d1.d7[1:6], ma.trailing, rep(last.ma, n.valid)), start=c(2,2), frequency = 7)
+
+ma.dd.pred.d1 <- diffinv(ma.trailing.pred, lag = 7, xi=train.issues.d1[1:7])
+ma.dd.pred <- diffinv(ma.dd.pred.d1, lag = 1, xi=train.issues.ts[1])
+
+accuracy(ma.dd.pred[(n.train+1):(n.train+n.valid)], valid.issues.ts)
+hist(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
+plot(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
+plot(ma.dd.pred,col='red')
+lines(issues.ts,col='blue')
+```
+
+# Regression
+
+```{r}
+train.issues.linear.regr.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
+train.issues.linear.regr.m 
+train.issues.linear.regr.pred <- forecast(train.issues.linear.regr.m , h=n.valid)
+
+accuracy(train.issues.linear.regr.pred, valid.issues.ts)
+hist(valid.issues.ts - train.issues.linear.regr.pred$mean)
+plot(valid.issues.ts - train.issues.linear.regr.pred$mean)
+plot(train.issues.linear.regr.pred)
+lines(valid.issues.ts)
+```
