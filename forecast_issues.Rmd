@@ -12,6 +12,7 @@ The goal of this experiment is to design the best model to forcaste the number o
 ```{r results='hide', message=FALSE, warning=FALSE}
 #install.packages('forecast')
 library('forecast')
+library(knitr)
 #load the data frame
 issues.csv <- read.csv("issues/julialang_julia.csv")
 commits.csv <- read.csv("commits/julialang_julia.csv")
@@ -48,17 +49,22 @@ n.train <- length(issues.ts) - n.valid
 
 train.issues.ts <- window(issues.ts, start=time[1], end=time[n.train])
 valid.issues.ts <- window(issues.ts, 
-                   start=time[n.train+1], 
-                   end=time[n.train+n.valid])
+                    start=time[n.train+1], 
+                    end=time[n.train+n.valid])
+
+train.commits.ts <- window(commits.ts, start=time[1], end=time[n.train])
+valid.commits.ts <- window(commits.ts, 
+                      start=time[n.train+1], 
+                      end=time[n.train+n.valid])
 ```
 
 # Naive Forecast
 
 ## Naive
 
-```{r}
+```{r kable}
 train.issues.naive.pred <- naive(train.issues.ts, h=n.valid)
-accuracy(train.issues.naive.pred, valid.issues.ts)
+kable(accuracy(train.issues.naive.pred, valid.issues.ts))
 hist(valid.issues.ts - train.issues.naive.pred$mean)
 plot(valid.issues.ts - train.issues.naive.pred$mean)
 plot(train.issues.naive.pred)
@@ -67,9 +73,9 @@ lines(valid.issues.ts)
 
 ## Seasonal Naive
 
-```{r}
+```{r} 
 train.issues.snaive.pred <- snaive(train.issues.ts, h=n.valid)
-accuracy(train.issues.snaive.pred, valid.issues.ts)
+kable(accuracy(train.issues.snaive.pred, valid.issues.ts))
 hist(valid.issues.ts - train.issues.snaive.pred$mean)
 plot(valid.issues.ts - train.issues.snaive.pred$mean)
 plot(train.issues.snaive.pred)
@@ -82,7 +88,7 @@ lines(valid.issues.ts)
 
 ```{r}
 train.issues.hw.pred <- hw(train.issues.ts, hw = "ZAA", h = n.valid)
-accuracy(train.issues.hw.pred, valid.issues.ts)
+kable(accuracy(train.issues.hw.pred, valid.issues.ts))
 hist(valid.issues.ts - train.issues.hw.pred$mean)
 plot(valid.issues.ts - train.issues.hw.pred$mean)
 plot(train.issues.hw.pred)
@@ -102,7 +108,7 @@ ma.trailing.pred <- ts(c(train.issues.d1.d7[1:6], ma.trailing, rep(last.ma, n.va
 ma.dd.pred.d1 <- diffinv(ma.trailing.pred, lag = 7, xi=train.issues.d1[1:7])
 ma.dd.pred <- diffinv(ma.dd.pred.d1, lag = 1, xi=train.issues.ts[1])
 
-accuracy(ma.dd.pred[(n.train+1):(n.train+n.valid)], valid.issues.ts)
+kable(accuracy(ma.dd.pred[(n.train+1):(n.train+n.valid)], valid.issues.ts))
 hist(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
 plot(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
 plot(ma.dd.pred,col='red')
@@ -111,14 +117,53 @@ lines(issues.ts,col='blue')
 
 # Regression
 
-```{r}
-train.issues.linear.regr.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
-train.issues.linear.regr.m 
-train.issues.linear.regr.pred <- forecast(train.issues.linear.regr.m , h=n.valid)
+## Linear regression
 
-accuracy(train.issues.linear.regr.pred, valid.issues.ts)
-hist(valid.issues.ts - train.issues.linear.regr.pred$mean)
-plot(valid.issues.ts - train.issues.linear.regr.pred$mean)
-plot(train.issues.linear.regr.pred)
+```{r}
+train.issues.linear.regr.add.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
+train.issues.linear.regr.add.m
+train.issues.linear.regr.add.pred <- forecast(train.issues.linear.regr.add.m , h=n.valid)
+
+kable(accuracy(train.issues.linear.regr.add.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.linear.regr.add.pred$mean)
+plot(valid.issues.ts - train.issues.linear.regr.add.pred$mean)
+plot(train.issues.linear.regr.add.pred)
 lines(valid.issues.ts)
 ```
+
+## exponential regression
+
+```{r}
+train.issues.linear.regr.mult.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
+train.issues.linear.regr.mult.m
+train.issues.linear.regr.mult.pred <- forecast(train.issues.linear.regr.mult.m , h=n.valid)
+
+kable(accuracy(train.issues.linear.regr.mult.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.linear.regr.mult.pred$mean)
+plot(valid.issues.ts - train.issues.linear.regr.mult.pred$mean)
+plot(train.issues.linear.regr.mult.pred)
+lines(valid.issues.ts)
+```
+
+# external regression
+
+
+```{r}
+plot(issues.ts, col='blue')
+lines(commits.ts, col='green')
+
+train.commits.d1 <- diff(train.commits.ts, lag = 1)
+train.commits.d1.d7 <- diff(train.commits.d1, lag = 7)
+
+plot(train.issues.d1.d7, col='blue')
+lines(lag(train.commits.d1.d7,2), col='green')
+
+```
+
+```{r}
+train.issues.arima.ext.m <- Arima(train.issues.ts, order=c(1,0,0), seasonal=c(1,0,0), xreg=train.commits.ts )
+train.issues.arima.ext.m
+```
+
+
+
