@@ -117,10 +117,10 @@ lines(issues.ts,col='blue')
 
 # Regression
 
-## Linear regression
+## Linear additive regression
 
 ```{r}
-train.issues.linear.regr.add.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
+train.issues.linear.regr.add.m <- tslm(train.issues.ts ~ trend + season)
 train.issues.linear.regr.add.m
 train.issues.linear.regr.add.pred <- forecast(train.issues.linear.regr.add.m , h=n.valid)
 
@@ -131,7 +131,7 @@ plot(train.issues.linear.regr.add.pred)
 lines(valid.issues.ts)
 ```
 
-## exponential regression
+## linear multiplicative regression
 
 ```{r}
 train.issues.linear.regr.mult.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
