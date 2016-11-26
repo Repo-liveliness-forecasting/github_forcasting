@@ -171,11 +171,9 @@ plot(issues.ts, main = 'Spark (AR(7))', bty = 'l', ylab = 'Number of Issues', xl
 lines(ets.pred$fitted + train.res.arima.pred$fitted, lwd = 2, col = 'blue')
 lines(ets.pred$mean + train.res.arima.pred$mean, lwd = 2, lty = 2, col = 'blue')
 
-plot(train.issues.ts - ets.pred$fitted, xlim = c(0, 54),
-     main = 'Forecast Error: Exponential Smoothing (MNM) vs. AR(14)', bty = 'l', ylab = 'Errors')
-lines(valid.issues.ts - ets.pred$mean)
-lines(train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted), col = 'orange', lwd = 1)
-lines(valid.issues.ts - (ets.pred$mean + train.res.arima.pred$mean), col = 'orange', lwd = 1)
+plot(train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted), xlim = c(0, 54),
+     main = 'AR(7) Forecast Errors Plot', bty = 'l', ylab = 'Errors')
+lines(valid.issues.ts - (ets.pred$mean + train.res.arima.pred$mean), col = 'blue', lwd = 2)
 
 rmse(act = train.issues.ts,
      est = (train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted)))
