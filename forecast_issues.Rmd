@@ -14,8 +14,8 @@ The goal of this experiment is to design the best model to forcaste the number o
 library('forecast')
 library(knitr)
 #load the data frame
-issues.csv <- read.csv("issues/julialang_julia.csv")
-commits.csv <- read.csv("commits/julialang_julia.csv")
+issues.csv <- read.csv("issues/tensorflow_tensorflow.csv")
+commits.csv <- read.csv("commits/tensorflow_tensorflow.csv")
 
 issues.csv$date = as.POSIXlt(as.Date(issues.csv$date,format='%m/%d/%Y'))
 commits.csv$date = as.POSIXlt(as.Date(commits.csv$date,format='%m/%d/%Y'))
