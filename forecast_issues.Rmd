@@ -14,6 +14,7 @@ The goal of this experiment is to design the best model to forcaste the number o
 library('forecast')
 library(knitr)
 #load the data frame
+# TRY MOVING AVERAGE
 issues.csv <- read.csv("issues/julialang_julia.csv")
 commits.csv <- read.csv("commits/julialang_julia.csv")
 
