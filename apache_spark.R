@@ -176,12 +176,12 @@ plot(train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted), xlim = c
 lines(valid.issues.ts - (ets.pred$mean + train.res.arima.pred$mean), col = 'blue', lwd = 2)
 
 rmse(act = train.issues.ts,
-     est = (train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted)))
-rmse(act = valid.issues.ts, est = valid.issues.ts - (ets.pred$mean + train.res.arima.pred$mean))
+     est = ets.pred$fitted + train.res.arima.pred$fitted)
+rmse(act = valid.issues.ts, est = ets.pred$mean + train.res.arima.pred$mean)
 
 mape(act = train.issues.ts,
-     est = (train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted)))
-mape(act = valid.issues.ts, est = valid.issues.ts - (ets.pred$mean + train.res.arima.pred$mean))
+     est = ets.pred$fitted + train.res.arima.pred$fitted)
+mape(act = valid.issues.ts, est = ets.pred$mean + train.res.arima.pred$mean)
 
 Acf(train.issues.ts - (ets.pred$fitted + train.res.arima.pred$fitted), lag.max = 7,
     main = 'Autocorrelations of residuals-of-residuals series')
