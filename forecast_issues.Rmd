@@ -1,8 +1,8 @@
 ---
-title: "Forcasting issues"
+title: "Forecasting issues"
 author: "Forcast Padawan 2"
 date: "November 17, 2016"
-output: pdf_document
+output: html_document
 ---
 
 The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that sthis could help Open Source organisation to manage there human ressources.
@@ -151,6 +151,8 @@ lines(valid.issues.ts)
 ```{r}
 plot(issues.ts, col='blue')
 lines(commits.ts, col='green')
+issues.14.ts <- window(issues.ts, start = 1, end = 14)
+Acf(issues.14.ts, lag.max = 14, main = "")
 
 train.commits.d1 <- diff(train.commits.ts, lag = 1)
 train.commits.d1.d7 <- diff(train.commits.d1, lag = 7)
@@ -158,12 +160,50 @@ train.commits.d1.d7 <- diff(train.commits.d1, lag = 7)
 plot(train.issues.d1.d7, col='blue')
 lines(lag(train.commits.d1.d7,2), col='green')
 
+
 ```
 
+#external regression using comb.file, stl
+```{r}
+comb.issues.commits <- read.csv("issues/tensorflow_combined.csv")
+yTrainexternal.ts <- ts(comb.issues.commits$number_of_issues[1:n.train], freq = 7, start = 1)
+stl.trainexternal <- stl(yTrainexternal.ts, s.window = "periodic")
+plot(stl.trainexternal)
+
+xTrainIScommit <- data.frame(IsCommit = comb.issues.commits$IS_commit[1:n.train])
+stlm.reg.fit <- stlm(yTrainexternal.ts, s.window = "periodic", xreg = xTrainIScommit, method = "arima")
+
+stlm.reg.fit$model
+
+xValidIScommit <- data.frame(IsCommit = comb.issues.commits$IS_commit[(n.train+1): (n.train + n.valid)])
+stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xValidIScommit, h = n.valid)
+plot(stlm.reg.pred, xlab = "Year", ylab = "Weekly Sales")
+kable(accuracy(stlm.reg.pred, valid.issues.ts))
+
+
+```
+
+
+ACF of raw shows lag-1 correl, but no seasonality
 ```{r}
 train.issues.arima.ext.m <- Arima(train.issues.ts, order=c(1,0,0), seasonal=c(1,0,0), xreg=train.commits.ts )
 train.issues.arima.ext.m
 ```
 
+```{r}
+ets = ets(train.issues.ts, model = 'ZZZ', restrict = FALSE, allow.multiplicative.trend = TRUE)
+summary(ets)
+ets.pred = forecast(ets, h = n.valid, level = 0)
+
+plot(ets.pred, main = 'Spark (Exponential Smoothing MNM)', bty = 'l', ylab = 'Number of Issues')
+lines(ets.pred$fitted, lwd = 2, col = 'blue')
+lines(valid.issues.ts)
+
+plot(train.issues.ts - ets.pred$fitted, main = 'Exponential Smoothing (MNM) Errors Plot',
+     bty = 'l', xlab = 'Week', ylab = 'Errors', xlim = c(0, 54))
+lines(valid.issues.ts - ets.pred$mean, lwd = 2, col = 'blue')
+kable(accuracy(ets.pred, valid.issues.ts))
+
+```
 
 
