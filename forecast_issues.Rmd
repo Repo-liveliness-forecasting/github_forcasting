@@ -1,6 +1,6 @@
 ---
-title: "Forcasting issues"
-author: "Forcast Padawan 2"
+title: "Forecasting issues"
+author: "Forecast Padawan 2"
 date: "November 17, 2016"
 output: pdf_document
 ---
@@ -11,6 +11,7 @@ The goal of this experiment is to design the best model to forcaste the number o
 
 ```{r results='hide', message=FALSE, warning=FALSE}
 #install.packages('forecast')
+
 library('forecast')
 library(knitr)
 #load the data frame
@@ -35,6 +36,8 @@ commits.csv <- subset(commits.csv, date <= to_date & date >= from_date)
 ```{r}
 #loading issues and commits into a ts object
 issues.ts <- ts(issues.csv$number_of_issues, frequency = 7) 
+
+Acf(issues.ts, lag.max = 14, main = "")
 
 commits.ts <- ts(commits.csv$number_of_commits, frequency = 7) 
 plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
@@ -63,31 +66,80 @@ issues  <- separate.train.test(issues.ts, n.valid)
 commits  <- separate.train.test(commits.ts, n.valid)
 ```
 
+```{r}
+mean.all.accuracy <- function(all.forecast) {
+  Reduce("+", all.forecast['summary',])/length(all.forecast['summary',])
+}
+
+plot.all.residuals <- function(all.forecast) {
+  plot(1, type="l", xlab="", ylab="", main="Residuals", xlim=c(48.5, 53.3), ylim=c(-30, 30))
+  sapply(1:n.sample, function(i) lines(all.forecast['residual',i]$residual))
+  return(NULL)
+}
+
+plot.all.pred <- function(all.forecast) {
+  plot(issues.ts, main="Prediction",xlim=c(30, 53.3))
+  if (class(all.forecast['pred',1]$pred) == "forecast") {
+    sapply(1:n.sample, function(i) lines(all.forecast['pred',i]$pred$mean, col=rgb(0, 0, 1, 0.5)))
+  } else {
+    sapply(1:n.sample, function(i) lines(all.forecast['pred',i]$pred, col=rgb(0, 0, 1, 0.5)))
+  }
+  return(NULL)
+}
+
+hist.all.residuals <- function(all.forecast) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
+  boxplot(residuals)
+  hist(residuals)
+  quantile(residuals,c(0.975,0.95,0.05,0.025))
+}
+```
+
 # Naive Forecast
 
 ## Naive
 
 ```{r kable}
-for(i in 1:n.sample) {
-  issues <- all.issues[,i]
-  train.issues.naive.pred <- naive(issues$train.ts, h=n.valid)
-  kable(accuracy(train.issues.naive.pred, issues$valid.ts))
-  hist(issues$valid.ts - train.issues.naive.pred$mean)
-  plot(issues$valid.ts - train.issues.naive.pred$mean)
-  plot(train.issues.naive.pred)
-  lines(issues$valid.ts) 
+
+naive.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$pred <- naive(sample$train.ts, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
 }
+
+all.naive.forecast <- sapply(1:n.sample, function(i) return(naive.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.naive.forecast))
+plot.all.pred(all.naive.forecast)
+plot.all.residuals(all.naive.forecast)
+hist.all.residuals(all.naive.forecast)
+
 ```
+
 
 ## Seasonal Naive
 
 ```{r} 
-train.issues.snaive.pred <- snaive(issues$train.ts, h=n.valid)
-kable(accuracy(train.issues.snaive.pred, issues$valid.ts))
-hist(issues$valid.ts - train.issues.snaive.pred$mean)
-plot(issues$valid.ts - train.issues.snaive.pred$mean)
-plot(train.issues.snaive.pred)
-lines(issues$valid.ts)
+snaive.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$pred <- snaive(sample$train.ts, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
+
+all.snaive.forecast <- sapply(1:n.sample, function(i) return(snaive.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.snaive.forecast))
+plot.all.pred(all.snaive.forecast)
+plot.all.residuals(all.snaive.forecast)
+hist.all.residuals(all.snaive.forecast)
 ```
 
 # Smoothing
@@ -95,29 +147,60 @@ lines(issues$valid.ts)
 ## Holt Winter
 
 ```{r}
-train.issues.hw.pred <- hw(issues$train.ts, hw = "ZAA", h = n.valid)
-kable(accuracy(train.issues.hw.pred, issues$valid.ts))
-hist(issues$valid.ts - train.issues.hw.pred$mean)
-plot(issues$valid.ts - train.issues.hw.pred$mean)
-plot(train.issues.hw.pred)
-lines(issues$valid.ts)
+hw.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$model <- ets(sample$train.ts, model = "ZAA")
+  results$pred <- forecast(results$model, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
+
+all.hw.forecast <- sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.hw.forecast))
+plot.all.pred(all.hw.forecast)
+plot.all.residuals(all.hw.forecast)
+hist.all.residuals(all.hw.forecast)
 ```
 
 ## Double differencing
 
 ```{r}
-train.issues.d1 <- diff(issues$train.ts, lag = 1)
-train.issues.d1.d7 <- diff(train.issues.d1, lag = 7)
+ma.dd.forecast <- function(sample) {
+  train.issues.d1 <- diff(sample$train.ts, lag = 1)
+  train.issues.d1.d7 <- diff(train.issues.d1, lag = 7)
+  
+  ma.trailing <- rollmean(train.issues.d1.d7, k = 7, align = "right")
+  last.ma <- tail(ma.trailing, 1)
+  ma.trailing.pred <- ts(c(ma.trailing, rep(last.ma, n.valid)), start=c(3, 1), frequency = 7)
+  
+  ma.dd.pred.d1 <- train.issues.d1
+  ma.dd.pred <- sample$train.ts
+  
+  for(i in 1:(n.valid/7)) {
+    ma.dd.pred.d1 <- ma.trailing.pred + lag(ma.dd.pred.d1,k = -7)
+    ma.dd.pred <- ma.dd.pred.d1 + lag(ma.dd.pred,k = -8)
+  }
+  
+  results = list()
+  results$valid <- sample$valid.ts
+  
+  results$pred <- ma.dd.pred
+  results$residual <- sample$valid.ts - results$pred
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
 
-ma.trailing <- rollmean(train.issues.d1.d7, k = 7, align = "right")
-last.ma <- tail(ma.trailing, 1)
-ma.trailing.pred <- ts(c(train.issues.d1.d7[1:6], ma.trailing, rep(last.ma, n.valid)), start=c(2,2), frequency = 7)
+all.ma.dd.forecast <- sapply(1:n.sample, function(i) return(ma.dd.forecast(all.issues[,i])))
 
-ma.dd.pred.d1 <- diffinv(ma.trailing.pred, lag = 7, xi=train.issues.d1[1:7])
-ma.dd.pred <- diffinv(ma.dd.pred.d1, lag = 1, xi=issues$train.ts[1])
-
-plot(ma.dd.pred,col='red')
-lines(issues.ts,col='blue')
+kable(mean.all.accuracy(all.ma.dd.forecast))
+plot.all.pred(all.ma.dd.forecast)
+plot.all.residuals(all.ma.dd.forecast)
+hist.all.residuals(all.ma.dd.forecast)
 ```
 
 # Regression
@@ -125,49 +208,68 @@ lines(issues.ts,col='blue')
 ## Linear additive regression
 
 ```{r}
-train.issues.linear.regr.add.m <- tslm(issues$train.ts ~ trend + season)
-train.issues.linear.regr.add.m
-train.issues.linear.regr.add.pred <- forecast(train.issues.linear.regr.add.m , h=n.valid)
+regr.add.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$model <- tslm(sample$train.ts ~ season)
+  results$pred <- forecast(results$model, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
 
-kable(accuracy(train.issues.linear.regr.add.pred, issues$valid.ts))
-hist(issues$valid.ts - train.issues.linear.regr.add.pred$mean)
-plot(issues$valid.ts - train.issues.linear.regr.add.pred$mean)
-plot(train.issues.linear.regr.add.pred)
-lines(issues$valid.ts)
+all.regr.add.forecast <- sapply(1:n.sample, function(i) return(regr.add.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.regr.add.forecast))
+plot.all.pred(all.regr.add.forecast)
+plot.all.residuals(all.regr.add.forecast)
+hist.all.residuals(all.regr.add.forecast)
 ```
 
 ## linear multiplicative regression
 
 ```{r}
-train.issues.linear.regr.mult.m <- tslm(issues$train.ts ~ trend + season, lambda = 0)
-train.issues.linear.regr.mult.m
-train.issues.linear.regr.mult.pred <- forecast(train.issues.linear.regr.mult.m , h=n.valid)
+regr.mult.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$model <- tslm(sample$train.ts ~ season + trend, lambda = 1)
+  results$pred <- forecast(results$model, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
 
-kable(accuracy(train.issues.linear.regr.mult.pred, issues$valid.ts))
-hist(issues$valid.ts - train.issues.linear.regr.mult.pred$mean)
-plot(issues$valid.ts - train.issues.linear.regr.mult.pred$mean)
-plot(train.issues.linear.regr.mult.pred)
-lines(issues$valid.ts)
-```
+all.regr.mult.forecast <- sapply(1:n.sample, function(i) return(regr.mult.forecast(all.issues[,i])))
 
-# external regression
-
-
-```{r}
-plot(issues.ts, col='blue')
-lines(commits.ts, col='green')
-
-train.commits.d1 <- diff(commits$train.ts, lag = 1)
-train.commits.d1.d7 <- diff(train.commits.d1, lag = 7)
-
-plot(train.issues.d1.d7, col='blue')
-lines(lag(train.commits.d1.d7,2), col='green')
+kable(mean.all.accuracy(all.regr.mult.forecast))
+plot.all.pred(all.regr.mult.forecast)
+plot.all.residuals(all.regr.mult.forecast)
+hist.all.residuals(all.regr.mult.forecast)
 
 ```
 
+## Arima
+
 ```{r}
-train.issues.arima.ext.m <- Arima(issues$train.ts, order=c(1,0,0), seasonal=c(1,0,0), xreg=commits$train.ts )
-train.issues.arima.ext.m
+arima.forecast <- function(sample) {
+  results = list()
+  results$valid <- sample$valid.ts
+  results$model <- Arima(sample$train.ts, order=c(1,0,0), seasonal=c(1,1,1))
+  results$pred <- forecast(results$model, h=n.valid)
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
+  
+  return(results)
+}
+
+all.arima.forecast <- sapply(1:n.sample, function(i) return(arima.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.arima.forecast))
+plot.all.pred(all.arima.forecast)
+plot.all.residuals(all.arima.forecast)
+hist.all.residuals(all.arima.forecast)
 ```
 
 
