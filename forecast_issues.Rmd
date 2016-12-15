@@ -72,13 +72,13 @@ mean.all.accuracy <- function(all.forecast) {
 }
 
 plot.all.residuals <- function(all.forecast) {
-  plot(1, type="l", xlab="", ylab="", main="Residuals", xlim=c(48.5, 53.3), ylim=c(-30, 30))
+  plot(1, type="l", main="Residuals", xlim=c(48.5, 53.3), ylim=c(-30, 30), xlab = 'Week', ylab = 'Errors')
   sapply(1:n.sample, function(i) lines(all.forecast['residual',i]$residual))
   return(NULL)
 }
 
 plot.all.pred <- function(all.forecast) {
-  plot(issues.ts, main="Prediction",xlim=c(30, 53.3))
+  plot(issues.ts, main="Prediction",xlim=c(30, 53.3), xlab = 'Week', ylab = 'Number of Issues')
   if (class(all.forecast['pred',1]$pred) == "forecast") {
     sapply(1:n.sample, function(i) lines(all.forecast['pred',i]$pred$mean, col=rgb(0, 0, 1, 0.5)))
   } else {
