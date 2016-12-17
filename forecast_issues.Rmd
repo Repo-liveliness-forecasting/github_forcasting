@@ -178,6 +178,7 @@ stlm.reg.fit$model
 xValidIScommit <- data.frame(IsCommit = comb.issues.commits$IS_commit[(n.train+1): (n.train + n.valid)])
 stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xValidIScommit, h = n.valid)
 plot(stlm.reg.pred, xlab = "Year", ylab = "Weekly Sales")
+lines(valid.issues.ts)
 kable(accuracy(stlm.reg.pred, valid.issues.ts))
 
 
