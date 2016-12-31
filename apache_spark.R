@@ -347,6 +347,29 @@ hist.all.residuals(all.regr.add.forecast,
 #       col = 'blue')
 # kable(accuracy(train.issues.lm.multiplicative.seasonality.pred, valid.issues.ts))
 
+# regr.mult.forecast = function(sample) {
+#   results = list()
+#   results$train = sample$train.ts
+#   results$valid = sample$valid.ts
+#   results$model = tslm(sample$train.ts ~ season, lambda = 0)
+#   results$pred = forecast(results$model, h = n.valid)
+#   results$fitted = results$pred$fitted
+#   results$residual = sample$valid.ts - results$pred$mean
+#   results$summary = accuracy(results$pred, sample$valid.ts)
+#   return(results)
+# }
+# 
+# all.regr.mult.forecast = sapply(1:n.sample, function(i) return(
+#   regr.mult.forecast(all.issues[, i])))
+# 
+# kable(mean.all.accuracy(all.regr.mult.forecast))
+# plot.all.pred(all.regr.mult.forecast,
+#               'Apache Spark (Linear Regression Multiplicative Seasonality)')
+# plot.all.residuals(all.regr.mult.forecast,
+#                    'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)')
+# hist.all.residuals(all.regr.mult.forecast,
+#                    'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)')
+
 
 # Autocorrelation of exponential smoothing residual series
 Acf(train.issues.ts - ets.pred$fitted, lag.max = 7,

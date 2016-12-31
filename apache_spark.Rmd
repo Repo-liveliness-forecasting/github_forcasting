@@ -2,7 +2,7 @@
 title: "Apache Spark"
 author: "Forecast Padawan 2"
 date: "January 3, 2017"
-output: pdf_document
+output: html_document
 ---
 
 The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that this could help Open Source organisation to manage there human ressources.
@@ -14,7 +14,7 @@ library(forecast)
 library(knitr)
 
 issues.csv = read.csv('issues/apache_spark.csv')
-issues.csv$date = as.POSIXlt(as.Date(issues.csv$date,format='%m/%d/%Y'))
+issues.csv$date = as.POSIXlt(as.Date(issues.csv$date, format='%m/%d/%Y'))
 ```
 
 # Keep the last 12 months data
@@ -32,6 +32,8 @@ str(issues.csv)
 
 ```{r}
 issues.ts = ts(issues.csv$number_of_issues, frequency = 7)
+time = time(issues.ts)
+n.valid = 21
 ```
 
 # Time Series Plot
@@ -51,7 +53,6 @@ Acf(diff.ts, lag.max = 7, main = 'Apache Spark: Acf on lag-1 difference')
 # Forecast functions
 ```{r}
 n.sample = 14
-n.valid = 21
 
 separate.train.test = function(timeseries, n.valid) {
   time = time(timeseries)
@@ -63,21 +64,12 @@ separate.train.test = function(timeseries, n.valid) {
   return(results)
 }
 
-time = time(issues.ts)
 all.issues = sapply(0:(n.sample - 1), function(i) return(separate.train.test(window(
   issues.ts, start = time[1], end = time[length(issues.ts) - i]), n.valid
 )))
 
 mean.all.accuracy = function(all.forecast) {
   Reduce('+', all.forecast['summary', ]) / length(all.forecast['summary', ])
-}
-
-mean.all.fitted = function(all.forecast) {
-  Reduce('+', all.forecast['fitted', ]) / length(all.forecast['fitted', ])
-}
-
-mean.all.residuals = function(all.forecast) {
-  Reduce('+', all.forecast['residual', ]) / length(all.forecast['residual', ])
 }
 
 plot.all.pred = function(all.forecast, plot.title) {
@@ -250,26 +242,94 @@ hist.all.residuals(all.regr.add.forecast,
 ## Multiplicative seasonality
 
 ```{r}
-regr.mult.forecast = function(sample) {
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$model = tslm(sample$train.ts ~ season, lambda = 0)
-  results$pred = forecast(results$model, h = n.valid)
-  results$fitted = results$pred$fitted
-  results$residual = sample$valid.ts - results$pred$mean
-  results$summary = accuracy(results$pred, sample$valid.ts)
-  return(results)
-}
+n.train = length(issues.ts) - n.valid
+train.issues.ts = window(issues.ts, start = time[1], end = time[n.train])
+valid.issues.ts = window(issues.ts, start = time[n.train + 1],
+                         end = time[n.train + n.valid])
 
-all.regr.mult.forecast = sapply(1:n.sample, function(i) return(
-  regr.mult.forecast(all.issues[, i])))
+train.issues.lm.multiplicative.seasonality = tslm(train.issues.ts ~ season, lambda = 0)
+train.issues.lm.multiplicative.seasonality.pred = forecast(
+  train.issues.lm.multiplicative.seasonality, h = n.valid, level = 5)
+plot(train.issues.lm.multiplicative.seasonality.pred, bty = 'l',
+     main = 'Apache Spark (Linear Regression Multiplicative Seasonality)',
+     ylab = 'Number of Issues')
+lines(train.issues.lm.multiplicative.seasonality.pred$fitted, lwd = 2, col = 'blue')
+lines(valid.issues.ts)
 
-kable(mean.all.accuracy(all.regr.mult.forecast))
-plot.all.pred(all.regr.mult.forecast,
-              'Apache Spark (Linear Regression Multiplicative Seasonality)')
-plot.all.residuals(all.regr.mult.forecast,
-                   'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)')
-hist.all.residuals(all.regr.mult.forecast,
-                   'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)')
+plot(train.issues.ts - train.issues.lm.multiplicative.seasonality.pred$fitted,
+     main = 'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)',
+     bty = 'l', xlab = 'Week',
+     ylab = 'Errors', xlim = c(0, 54))
+lines(valid.issues.ts - train.issues.lm.multiplicative.seasonality.pred$mean, lwd = 2,
+      col = 'blue')
+kable(accuracy(train.issues.lm.multiplicative.seasonality.pred, valid.issues.ts))
+```
+
+# External Info
+
+```{r}
+commits.csv = read.csv('commits/apache_spark.csv')
+commits.csv$date = as.POSIXlt(as.Date(commits.csv$date, format='%m/%d/%Y'))
+commits.csv = subset(commits.csv, date <= to_date & date >= from_date)
+str(commits.csv)
+
+commits.csv$isCommit = ifelse(commits.csv$number_of_commits != 0, 1, 0)
+commits.csv$lag1_isCommit = c(NA, commits.csv$isCommit[1:(length(commits.csv$isCommit) - 1)])
+
+commits.ts = ts(commits.csv$lag1_isCommit, frequency = 7)
+train.commits.ts = window(commits.ts, start = time[1], end = time[n.train])
+valid.commits.ts = window(commits.ts, start = time[n.train + 1], end = time[n.train + n.valid])
+```
+
+## Naive
+
+```{r}
+commits.naive.pred = naive(train.commits.ts, h = n.valid)
+
+library(caret)
+confusionMatrix(commits.naive.pred$mean, valid.commits.ts)
+```
+
+## Logistic Regression
+
+```{r}
+commits.csv$issues = c(train.issues.ts, all.hw.forecast[[2]])
+commits.csv$lag2_issues = c(rep(NA, 2), commits.csv$issues[1:(length(commits.csv$issues) - 2)])
+train.commits = commits.csv[(1:n.train), ]
+valid.commits = commits.csv[((n.train + 1):(n.train + n.valid)), ]
+
+commits.lr = glm(lag1_isCommit ~ lag2_issues, data = train.commits, family = 'binomial')
+commits.lr.pred = predict(commits.lr, valid.commits, type = 'response')
+
+confusionMatrix(ifelse(commits.lr$fitted.values > 0.5, 1, 0),
+                train.commits$lag1_isCommit[3:(length(train.commits$lag1_isCommit))])
+confusionMatrix(ifelse(commits.lr.pred > 0.5, 1, 0), valid.commits$lag1_isCommit)
+```
+
+## Neural Networks
+
+```{r}
+commits.avnnet = avNNet(lag1_isCommit ~ lag2_issues, data = train.commits, size = 5)
+commits.avnnet.pred = predict(commits.avnnet, valid.commits, type = 'response')
+confusionMatrix(ifelse(commits.avnnet.pred > 0.5, 1, 0), valid.commits$lag1_isCommit)
+```
+
+## Incorporate the external info
+
+```{r}
+issues.csv$lag1_isCommit = c(train.commits$lag1_isCommit, commits.naive.pred$mean)
+xTrain = data.frame(isCommit = issues.csv$lag1_isCommit[1:n.train])
+xTest = data.frame(isCommit = issues.csv$lag1_isCommit[(n.train + 1):(n.train + n.valid)])
+stlm.reg.fit = stlm(train.issues.ts, s.window = 'periodic', xreg = xTrain, method = 'arima')
+stlm.reg.fit$model
+stlm.reg.pred = forecast(stlm.reg.fit, xreg = xTest, h = n.valid)
+
+plot(stlm.reg.pred, ylab = 'Number of Issues', xlab = 'Week', bty = 'l')
+lines(stlm.reg.pred$fitted, col = 'blue', lwd = 2)
+lines(valid.issues.ts)
+
+plot(train.issues.ts - stlm.reg.pred$fitted, main = 'External Info Errors Plot', bty = 'l',
+     ylab = 'Errors', xlab = 'Week', xlim = c(0, 54))
+lines(valid.issues.ts - stlm.reg.pred$mean, col = 'blue', lwd = 2)
+kable(accuracy(stlm.reg.pred, valid.issues.ts))
 ```
