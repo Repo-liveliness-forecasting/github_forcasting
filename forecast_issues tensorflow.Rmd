@@ -1,0 +1,245 @@
+---
+title: "Forecasting issues"
+author: "Forcast Padawan 2"
+date: "November 17, 2016"
+output: html_document
+---
+
+The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that sthis could help Open Source organisation to manage there human ressources.
+
+# Load the data
+
+```{r results='hide', message=FALSE, warning=FALSE}
+#install.packages('forecast')
+library('forecast')
+library(knitr)
+#load the data frame
+issues.csv <- read.csv("issues/tensorflow_tensorflow.csv")
+commits.csv <- read.csv("commits/tensorflow_tensorflow.csv")
+
+issues.csv$date = as.POSIXlt(as.Date(issues.csv$date,format='%m/%d/%Y'))
+commits.csv$date = as.POSIXlt(as.Date(commits.csv$date,format='%m/%d/%Y'))
+```
+
+keep the last 12 months
+
+```{r}
+to_date <- issues.csv$date[length(issues.csv$date)]
+from_date <- to_date
+from_date$year <- from_date$year - 1
+
+issues.csv <- subset(issues.csv, date <= to_date & date >= from_date)
+commits.csv <- subset(commits.csv, date <= to_date & date >= from_date)
+```
+
+```{r}
+#loading issues and commits into a ts object
+issues.ts <- ts(issues.csv$number_of_issues, frequency = 7) 
+
+commits.ts <- ts(commits.csv$number_of_commits, frequency = 7) 
+plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
+plot(commits.ts, main = 'Commits', bty = 'l', ylab = 'Number of Commits')
+```
+
+```{r}
+time <- time(issues.ts)
+
+n.valid <- 21
+n.train <- length(issues.ts) - n.valid
+
+train.issues.ts <- window(issues.ts, start=time[1], end=time[n.train])
+valid.issues.ts <- window(issues.ts, 
+                    start=time[n.train+1], 
+                    end=time[n.train+n.valid])
+
+train.commits.ts <- window(commits.ts, start=time[1], end=time[n.train])
+valid.commits.ts <- window(commits.ts, 
+                      start=time[n.train+1], 
+                      end=time[n.train+n.valid])
+```
+
+# Naive Forecast
+
+## Naive
+
+```{r kable}
+train.issues.naive.pred <- naive(train.issues.ts, h=n.valid)
+kable(accuracy(train.issues.naive.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.naive.pred$mean)
+plot(valid.issues.ts - train.issues.naive.pred$mean)
+plot(train.issues.naive.pred)
+lines(valid.issues.ts)
+```
+
+## Seasonal Naive
+
+```{r} 
+train.issues.snaive.pred <- snaive(train.issues.ts, h=n.valid)
+kable(accuracy(train.issues.snaive.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.snaive.pred$mean)
+plot(valid.issues.ts - train.issues.snaive.pred$mean)
+plot(train.issues.snaive.pred)
+lines(valid.issues.ts)
+```
+
+# Smoothing
+
+## Holt Winter
+
+```{r}
+train.issues.hw.pred <- hw(train.issues.ts, hw = "ZAA", h = n.valid)
+kable(accuracy(train.issues.hw.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.hw.pred$mean)
+plot(valid.issues.ts - train.issues.hw.pred$mean)
+plot(train.issues.hw.pred)
+lines(valid.issues.ts)
+```
+
+## Double differencing
+
+```{r}
+train.issues.d1 <- diff(train.issues.ts, lag = 1)
+train.issues.d1.d7 <- diff(train.issues.d1, lag = 7)
+
+ma.trailing <- rollmean(train.issues.d1.d7, k = 7, align = "right")
+last.ma <- tail(ma.trailing, 1)
+ma.trailing.pred <- ts(c(train.issues.d1.d7[1:6], ma.trailing, rep(last.ma, n.valid)), start=c(2,2), frequency = 7)
+
+ma.dd.pred.d1 <- diffinv(ma.trailing.pred, lag = 7, xi=train.issues.d1[1:7])
+ma.dd.pred <- diffinv(ma.dd.pred.d1, lag = 1, xi=train.issues.ts[1])
+
+kable(accuracy(ma.dd.pred[(n.train+1):(n.train+n.valid)], valid.issues.ts))
+hist(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
+plot(valid.issues.ts - ma.dd.pred[(n.train+1):(n.train+n.valid)])
+plot(ma.dd.pred,col='red')
+lines(issues.ts,col='blue')
+```
+
+# Regression
+
+## Linear additive regression
+
+```{r}
+train.issues.linear.regr.add.m <- tslm(train.issues.ts ~ trend + season)
+train.issues.linear.regr.add.m
+train.issues.linear.regr.add.pred <- forecast(train.issues.linear.regr.add.m , h=n.valid)
+
+kable(accuracy(train.issues.linear.regr.add.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.linear.regr.add.pred$mean)
+plot(valid.issues.ts - train.issues.linear.regr.add.pred$mean)
+plot(train.issues.linear.regr.add.pred)
+lines(valid.issues.ts)
+```
+
+## linear multiplicative regression
+
+```{r}
+train.issues.linear.regr.mult.m <- tslm(train.issues.ts ~ trend + season, lambda = 0)
+train.issues.linear.regr.mult.m
+train.issues.linear.regr.mult.pred <- forecast(train.issues.linear.regr.mult.m , h=n.valid)
+
+kable(accuracy(train.issues.linear.regr.mult.pred, valid.issues.ts))
+hist(valid.issues.ts - train.issues.linear.regr.mult.pred$mean)
+plot(valid.issues.ts - train.issues.linear.regr.mult.pred$mean)
+plot(train.issues.linear.regr.mult.pred)
+lines(valid.issues.ts)
+```
+
+# external regression
+
+
+```{r}
+plot(issues.ts, col='blue')
+lines(commits.ts, col='green')
+issues.14.ts <- window(issues.ts, start = 1, end = 14)
+Acf(issues.14.ts, lag.max = 14, main = "")
+
+train.commits.d1 <- diff(train.commits.ts, lag = 1)
+train.commits.d1.d7 <- diff(train.commits.d1, lag = 7)
+
+plot(train.issues.d1.d7, col='blue')
+lines(lag(train.commits.d1.d7,2), col='green')
+
+
+```
+
+#external regression using comb.file, stl
+```{r}
+comb.issues.commits <- read.csv("issues/tensorflow_combined.csv")
+yTrainexternal.ts <- ts(comb.issues.commits$number_of_issues[1:n.train], freq = 7, start = 1)
+stl.trainexternal <- stl(yTrainexternal.ts, s.window = "periodic")
+plot(stl.trainexternal)
+
+xTrainIScommit <- data.frame(IsCommit = comb.issues.commits$IS_commit[1:n.train])
+stlm.reg.fit <- stlm(yTrainexternal.ts, s.window = "periodic", xreg = xTrainIScommit, method = "arima")
+
+stlm.reg.fit$model
+
+xValidIScommit <- data.frame(IsCommit = comb.issues.commits$IS_commit[(n.train+1): (n.train + n.valid)])
+stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xValidIScommit, h = n.valid)
+plot(stlm.reg.pred, xlab = "Year", ylab = "Weekly Sales")
+lines(valid.issues.ts)
+kable(accuracy(stlm.reg.pred, valid.issues.ts))
+
+
+```
+
+
+ACF of raw shows lag-1 correl, but no seasonality
+```{r}
+train.issues.arima.ext.m <- Arima(train.issues.ts, order=c(1,0,0), seasonal=c(1,0,0), xreg=train.commits.ts )
+train.issues.arima.ext.m
+```
+
+```{r}
+ets = ets(train.issues.ts, model = 'ZZZ', restrict = FALSE, allow.multiplicative.trend = TRUE)
+summary(ets)
+ets.pred = forecast(ets, h = n.valid, level = 0)
+
+plot(ets.pred, main = 'Spark (Exponential Smoothing MNM)', bty = 'l', ylab = 'Number of Issues')
+lines(ets.pred$fitted, lwd = 2, col = 'blue')
+lines(valid.issues.ts)
+
+plot(train.issues.ts - ets.pred$fitted, main = 'Exponential Smoothing (MNM) Errors Plot',
+     bty = 'l', xlab = 'Week', ylab = 'Errors', xlim = c(0, 54))
+lines(valid.issues.ts - ets.pred$mean, lwd = 2, col = 'blue')
+kable(accuracy(ets.pred, valid.issues.ts))
+
+```
+
+## Quantile Regression to obtain 90% pred interv based on Taylor and Bunn (1999)
+```{r}
+library("quantreg")
+
+#first calculate errors
+ets = ets(train.issues.ts, model = 'ZZZ', restrict = FALSE, allow.multiplicative.trend = TRUE)
+summary(ets)
+ets.pred = forecast(ets, h = n.valid, level = 0)
+error <- valid.issues.ts - ets.pred$mean
+
+#define t and quant
+t <- 1:length(valid.issues.ts)
+tsq <- t^2
+
+quant.05 <- rq(error ~ t + tsq, tau=0.05)
+quant.95 <- rq(error ~ t + tsq, tau=0.95)
+
+## Make Predictions for quantile regressions
+
+t <- 1:length(valid.issues.ts)
+tsq <- t^2
+newdata <- as.data.frame(cbind(t,tsq))
+
+pred.05 <- predict(quant.05,newdata)
+pred.95 <- predict(quant.95,newdata)
+
+## Estimate Empirical Pred Interval
+
+forecast <- forecast(ets, h= length(valid.issues.ts))
+forecast.lpl <- ets.pred$mean+pred.05
+forecast.upl <- ets.pred$mean+pred.95
+
+forecast.limit <- cbind(ets.pred$mean,forecast.lpl,forecast.upl)
+ts.plot(forecast.limit)
+```
+
