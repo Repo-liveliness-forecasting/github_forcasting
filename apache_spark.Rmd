@@ -13,27 +13,27 @@ The goal of this experiment is to design the best model to forcaste the number o
 library(forecast)
 library(knitr)
 
-issues.csv = read.csv('issues/apache_spark.csv')
-issues.csv$date = as.POSIXlt(as.Date(issues.csv$date, format='%m/%d/%Y'))
+issues.csv <- read.csv('issues/apache_spark.csv')
+issues.csv$date <- as.POSIXlt(as.Date(issues.csv$date, format='%m/%d/%Y'))
 ```
 
 # Keep the last 12 months data
 
 ```{r}
-to_date = issues.csv$date[length(issues.csv$date)]
-from_date = to_date
-from_date$year = from_date$year - 1
+to_date <- issues.csv$date[length(issues.csv$date)]
+from_date <- to_date
+from_date$year <- from_date$year - 1
 
-issues.csv = subset(issues.csv, date <= to_date & date >= from_date)
+issues.csv <- subset(issues.csv, date <= to_date & date >= from_date)
 str(issues.csv)
 ```
 
 # Convert issues into a ts object
 
 ```{r}
-issues.ts = ts(issues.csv$number_of_issues, frequency = 7)
-time = time(issues.ts)
-n.valid = 21
+issues.ts <- ts(issues.csv$number_of_issues, frequency = 7)
+time <- time(issues.ts)
+n.valid <- 21
 ```
 
 # Time Series Plot
@@ -46,33 +46,33 @@ plot(issues.ts, main = 'Apache Spark', bty = 'l', ylab = 'Number of Issues',
 # Check whether the series is random walk
 
 ```{r}
-diff.ts = diff(issues.ts, lag = 1)
+diff.ts <- diff(issues.ts, lag = 1)
 Acf(diff.ts, lag.max = 7, main = 'Apache Spark: Acf on lag-1 difference')
 ```
 
 # Forecast functions
 ```{r}
-n.sample = 14
+n.sample <- 14
 
-separate.train.test = function(timeseries, n.valid) {
-  time = time(timeseries)
-  n.train = length(timeseries) - n.valid
-  results = list()
-  results$train.ts = window(timeseries, start = time[1], end = time[n.train])
-  results$valid.ts = window(timeseries, start = time[n.train + 1],
+separate.train.test <- function(timeseries, n.valid) {
+  time <- time(timeseries)
+  n.train <- length(timeseries) - n.valid
+  results <- list()
+  results$train.ts <- window(timeseries, start = time[1], end = time[n.train])
+  results$valid.ts <- window(timeseries, start = time[n.train + 1],
                             end = time[n.train + n.valid])
   return(results)
 }
 
-all.issues = sapply(0:(n.sample - 1), function(i) return(separate.train.test(window(
+all.issues <- sapply(0:(n.sample - 1), function(i) return(separate.train.test(window(
   issues.ts, start = time[1], end = time[length(issues.ts) - i]), n.valid
 )))
 
-mean.all.accuracy = function(all.forecast) {
+mean.all.accuracy <- function(all.forecast) {
   Reduce('+', all.forecast['summary', ]) / length(all.forecast['summary', ])
 }
 
-plot.all.pred = function(all.forecast, plot.title) {
+plot.all.pred <- function(all.forecast, plot.title) {
   plot(issues.ts, main = plot.title, bty = 'l', ylab = 'Number of Issues',
        xlab = 'Week')
   if (class(all.forecast['pred', 1]$pred) == 'forecast') {
@@ -83,7 +83,7 @@ plot.all.pred = function(all.forecast, plot.title) {
   return(NULL)
 }
 
-plot.all.residuals = function(all.forecast, plot.title) {
+plot.all.residuals <- function(all.forecast, plot.title) {
   plot(1, bty = 'l', main = plot.title, xlim = c(0, 54), ylim = c(-40, 40),
        xlab = 'Week', ylab = 'Errors')
   sapply(1:n.sample, function(i) lines(
@@ -93,8 +93,8 @@ plot.all.residuals = function(all.forecast, plot.title) {
   return(NULL)
 }
 
-hist.all.residuals = function(all.forecast, plot.title) {
-  residuals = sapply(1:n.sample, function(i) as.numeric(
+hist.all.residuals <- function(all.forecast, plot.title) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(
     all.forecast['residual', i]$residual
   ))
   boxplot(residuals, main = plot.title)
@@ -108,18 +108,18 @@ hist.all.residuals = function(all.forecast, plot.title) {
 ## Naive
 
 ```{r}
-naive.forecast = function(sample) {
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$pred = naive(sample$train.ts, h = n.valid)
-  results$fitted = results$pred$fitted
-  results$residual = sample$valid.ts - results$pred$mean
-  results$summary = accuracy(results$pred, sample$valid.ts)
+naive.forecast <- function(sample) {
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$pred <- naive(sample$train.ts, h = n.valid)
+  results$fitted <- results$pred$fitted
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
   return(results)
 }
 
-all.naive.forecast = sapply(1:n.sample, function(i) return(
+all.naive.forecast <- sapply(1:n.sample, function(i) return(
   naive.forecast(all.issues[, i])
 ))
 
@@ -132,18 +132,18 @@ hist.all.residuals(all.naive.forecast, 'Apache Spark (Naive Forecast Residuals)'
 ## Seasonal Naive
 
 ```{r}
-snaive.forecast = function(sample) {
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$pred = snaive(sample$train.ts, h = n.valid)
-  results$fitted = results$pred$fitted
-  results$residual = sample$valid.ts - results$pred$mean
-  results$summary = accuracy(results$pred, sample$valid.ts)
+snaive.forecast <- function(sample) {
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$pred <- snaive(sample$train.ts, h = n.valid)
+  results$fitted <- results$pred$fitted
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
   return(results)
 }
 
-all.snaive.forecast = sapply(1:n.sample, function(i) return(
+all.snaive.forecast <- sapply(1:n.sample, function(i) return(
   snaive.forecast(all.issues[, i])))
 
 kable(mean.all.accuracy(all.snaive.forecast))
@@ -159,22 +159,23 @@ hist.all.residuals(all.snaive.forecast,
 ## Deseasonalize series + Moving Average
 
 ```{r}
-ma.forecast = function(sample) {
-  train.issues.d7 = diff(sample$train.ts, lag = 7)
-  ma.trailing = rollmean(train.issues.d7, k = 7, align = "right")
-  last.ma = tail(ma.trailing, 1)
-  ma.trailing.pred = ts(c(ma.trailing, rep(last.ma, n.valid)), start = c(3, 1), frequency = 7)
-  ma.pred = sample$train.ts
+ma.forecast <- function(sample) {
+  train.issues.d7 <- diff(sample$train.ts, lag = 7)
+  ma.trailing <- rollmean(train.issues.d7, k = 7, align = "right")
+  last.ma <- tail(ma.trailing, 1)
+  ma.trailing.pred <- ts(c(ma.trailing, rep(last.ma, n.valid)), start = c(3, 1), frequency = 7)
+  ma.pred <- sample$train.ts
   for(i in 1:(n.valid / 7)) {
-    ma.pred = ma.trailing.pred + lag(ma.pred, k = -7)
+    ma.pred <- ma.trailing.pred + lag(ma.pred, k = -7)
   }
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$pred = ma.pred
-  results$fitted = ma.pred
-  results$residual = sample$valid.ts - results$fitted
-  results$summary = accuracy(results$fitted, sample$valid.ts)
+  
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$pred <- ma.pred
+  results$fitted <- ma.pred
+  results$residual <- sample$valid.ts - results$fitted
+  results$summary <- accuracy(results$fitted, sample$valid.ts)
   return(results)
 }
 
@@ -189,20 +190,20 @@ hist.all.residuals(all.ma.forecast, 'Apache Spark (Moving Average Residuals)')
 ## Exponential Smoothing
 
 ```{r}
-hw.forecast = function(sample) {
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$model = ets(sample$train.ts, model = "ZZZ", allow.multiplicative.trend = TRUE,
+hw.forecast <- function(sample) {
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$model <- ets(sample$train.ts, model = "ZZZ", allow.multiplicative.trend = TRUE,
                        restrict = FALSE)
-  results$pred = forecast(results$model, h = n.valid)
-  results$fitted = results$pred$fitted
-  results$residual = sample$valid.ts - results$pred$mean
-  results$summary = accuracy(results$pred, sample$valid.ts)
+  results$pred <- forecast(results$model, h = n.valid)
+  results$fitted <- results$pred$fitted
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
   return(results)
 }
 
-all.hw.forecast = sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
+all.hw.forecast <- sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
 
 kable(mean.all.accuracy(all.hw.forecast))
 plot.all.pred(all.hw.forecast, 'Apache Spark (Holt Winter)')
@@ -216,18 +217,18 @@ hist.all.residuals(all.hw.forecast, 'Apache Spark (Holt Winter Residuals)')
 
 ```{r}
 regr.add.forecast <- function(sample) {
-  results = list()
-  results$train = sample$train.ts
-  results$valid = sample$valid.ts
-  results$model = tslm(sample$train.ts ~ season)
-  results$pred = forecast(results$model, h=n.valid)
-  results$fitted = results$pred$fitted
-  results$residual = sample$valid.ts - results$pred$mean
-  results$summary = accuracy(results$pred, sample$valid.ts)
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$model <- tslm(sample$train.ts ~ season)
+  results$pred <- forecast(results$model, h=n.valid)
+  results$fitted <- results$pred$fitted
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
   return(results)
 }
 
-all.regr.add.forecast = sapply(1:n.sample, function(i) return(
+all.regr.add.forecast <- sapply(1:n.sample, function(i) return(
   regr.add.forecast(all.issues[, i])))
 
 kable(mean.all.accuracy(all.regr.add.forecast))
@@ -242,13 +243,13 @@ hist.all.residuals(all.regr.add.forecast,
 ## Multiplicative seasonality
 
 ```{r}
-n.train = length(issues.ts) - n.valid
-train.issues.ts = window(issues.ts, start = time[1], end = time[n.train])
-valid.issues.ts = window(issues.ts, start = time[n.train + 1],
+n.train <- length(issues.ts) - n.valid
+train.issues.ts <- window(issues.ts, start = time[1], end = time[n.train])
+valid.issues.ts <- window(issues.ts, start = time[n.train + 1],
                          end = time[n.train + n.valid])
 
-train.issues.lm.multiplicative.seasonality = tslm(train.issues.ts ~ season, lambda = 0)
-train.issues.lm.multiplicative.seasonality.pred = forecast(
+train.issues.lm.multiplicative.seasonality <- tslm(train.issues.ts ~ season, lambda = 0)
+train.issues.lm.multiplicative.seasonality.pred <- forecast(
   train.issues.lm.multiplicative.seasonality, h = n.valid, level = 5)
 plot(train.issues.lm.multiplicative.seasonality.pred, bty = 'l',
      main = 'Apache Spark (Linear Regression Multiplicative Seasonality)',
@@ -265,26 +266,39 @@ lines(valid.issues.ts - train.issues.lm.multiplicative.seasonality.pred$mean, lw
 kable(accuracy(train.issues.lm.multiplicative.seasonality.pred, valid.issues.ts))
 ```
 
+# Neural Networks
+
+```{r}
+issues.nnetar <- nnetar(train.issues.ts)
+issues.nnetar.pred <- forecast(issues.nnetar, h = n.valid)
+accuracy(issues.nnetar.pred, valid.issues.ts)
+
+plot(train.issues.ts, xlim = c(0, 54), bty = 'l')
+lines(issues.nnetar.pred$fitted, lwd = 2, col = 'blue')
+lines(issues.nnetar.pred$mean, lwd = 2, col = 'blue', lty = 2)
+lines(valid.issues.ts)
+```
+
 # External Info
 
 ```{r}
-commits.csv = read.csv('commits/apache_spark.csv')
-commits.csv$date = as.POSIXlt(as.Date(commits.csv$date, format='%m/%d/%Y'))
-commits.csv = subset(commits.csv, date <= to_date & date >= from_date)
+commits.csv <- read.csv('commits/apache_spark.csv')
+commits.csv$date <- as.POSIXlt(as.Date(commits.csv$date, format='%m/%d/%Y'))
+commits.csv <- subset(commits.csv, date <= to_date & date >= from_date)
 str(commits.csv)
 
-commits.csv$isCommit = ifelse(commits.csv$number_of_commits != 0, 1, 0)
-commits.csv$lag1_isCommit = c(NA, commits.csv$isCommit[1:(length(commits.csv$isCommit) - 1)])
+commits.csv$isCommit <- ifelse(commits.csv$number_of_commits != 0, 1, 0)
+commits.csv$lag1_isCommit <- c(NA, commits.csv$isCommit[1:(length(commits.csv$isCommit) - 1)])
 
-commits.ts = ts(commits.csv$lag1_isCommit, frequency = 7)
-train.commits.ts = window(commits.ts, start = time[1], end = time[n.train])
-valid.commits.ts = window(commits.ts, start = time[n.train + 1], end = time[n.train + n.valid])
+commits.ts <- ts(commits.csv$lag1_isCommit, frequency = 7)
+train.commits.ts <- window(commits.ts, start = time[1], end = time[n.train])
+valid.commits.ts <- window(commits.ts, start = time[n.train + 1], end = time[n.train + n.valid])
 ```
 
 ## Naive
 
 ```{r}
-commits.naive.pred = naive(train.commits.ts, h = n.valid)
+commits.naive.pred <- naive(train.commits.ts, h = n.valid)
 
 library(caret)
 confusionMatrix(commits.naive.pred$mean, valid.commits.ts)
@@ -293,13 +307,15 @@ confusionMatrix(commits.naive.pred$mean, valid.commits.ts)
 ## Logistic Regression
 
 ```{r}
-commits.csv$issues = c(train.issues.ts, all.hw.forecast[[2]])
-commits.csv$lag2_issues = c(rep(NA, 2), commits.csv$issues[1:(length(commits.csv$issues) - 2)])
-train.commits = commits.csv[(1:n.train), ]
-valid.commits = commits.csv[((n.train + 1):(n.train + n.valid)), ]
+commits.csv$issues <- c(train.issues.ts, all.hw.forecast[[2]])
+commits.csv$lag2_issues <- c(rep(NA, 2),
+                             commits.csv$issues[1:(length(commits.csv$issues) - 2)])
+train.commits <- commits.csv[(1:n.train), ]
+valid.commits <- commits.csv[((n.train + 1):(n.train + n.valid)), ]
 
-commits.lr = glm(lag1_isCommit ~ lag2_issues, data = train.commits, family = 'binomial')
-commits.lr.pred = predict(commits.lr, valid.commits, type = 'response')
+commits.lr <- glm(lag1_isCommit ~ lag2_issues, data = train.commits, family = 'binomial')
+new <- data.frame(lag2_issues = valid.commits$lag2_issues)
+commits.lr.pred <- predict(commits.lr, new, type = 'response')
 
 confusionMatrix(ifelse(commits.lr$fitted.values > 0.5, 1, 0),
                 train.commits$lag1_isCommit[3:(length(train.commits$lag1_isCommit))])
@@ -309,20 +325,20 @@ confusionMatrix(ifelse(commits.lr.pred > 0.5, 1, 0), valid.commits$lag1_isCommit
 ## Neural Networks
 
 ```{r}
-commits.avnnet = avNNet(lag1_isCommit ~ lag2_issues, data = train.commits, size = 5)
-commits.avnnet.pred = predict(commits.avnnet, valid.commits, type = 'response')
+commits.avnnet <- avNNet(lag1_isCommit ~ lag2_issues, data = train.commits, size = 5)
+commits.avnnet.pred <- predict(commits.avnnet, new, type = 'response')
 confusionMatrix(ifelse(commits.avnnet.pred > 0.5, 1, 0), valid.commits$lag1_isCommit)
 ```
 
 ## Incorporate the external info
 
 ```{r}
-issues.csv$lag1_isCommit = c(train.commits$lag1_isCommit, commits.naive.pred$mean)
-xTrain = data.frame(isCommit = issues.csv$lag1_isCommit[1:n.train])
-xTest = data.frame(isCommit = issues.csv$lag1_isCommit[(n.train + 1):(n.train + n.valid)])
-stlm.reg.fit = stlm(train.issues.ts, s.window = 'periodic', xreg = xTrain, method = 'arima')
+issues.csv$lag1_isCommit <- c(train.commits$lag1_isCommit, commits.naive.pred$mean)
+xTrain <- data.frame(isCommit = issues.csv$lag1_isCommit[1:n.train])
+xTest <- data.frame(isCommit = issues.csv$lag1_isCommit[(n.train + 1):(n.train + n.valid)])
+stlm.reg.fit <- stlm(train.issues.ts, s.window = 'periodic', xreg = xTrain, method = 'arima')
 stlm.reg.fit$model
-stlm.reg.pred = forecast(stlm.reg.fit, xreg = xTest, h = n.valid)
+stlm.reg.pred <- forecast(stlm.reg.fit, xreg = xTest, h = n.valid)
 
 plot(stlm.reg.pred, ylab = 'Number of Issues', xlab = 'Week', bty = 'l')
 lines(stlm.reg.pred$fitted, col = 'blue', lwd = 2)
@@ -332,4 +348,6 @@ plot(train.issues.ts - stlm.reg.pred$fitted, main = 'External Info Errors Plot',
      ylab = 'Errors', xlab = 'Week', xlim = c(0, 54))
 lines(valid.issues.ts - stlm.reg.pred$mean, col = 'blue', lwd = 2)
 kable(accuracy(stlm.reg.pred, valid.issues.ts))
+summary(stlm.reg.fit)
+stlm.reg.pred$model
 ```
