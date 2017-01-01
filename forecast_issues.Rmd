@@ -20,7 +20,7 @@ repository.csv <- read.csv("time_series/apache_spark_daily.csv")
 repository.csv$date = as.POSIXlt(as.Date(repository.csv$date,format='%Y-%m-%d'))
 ```
 
-keep the last 12 months
+# keep the last 12 months
 
 ```{r}
 to_date <- repository.csv$date[length(repository.csv$date)]
@@ -33,6 +33,7 @@ repository.csv <- subset(repository.csv, date <= to_date & date >= from_date)
 ```{r}
 #loading issues and commits into a ts object
 issues.ts <- ts(repository.csv$number_of_issues, frequency = 7) 
+
 
 Acf(issues.ts, lag.max = 14, main = "")
 
@@ -58,7 +59,7 @@ separate.train.test <- function(timeserie, n.valid) {
   results$valid.ts <- window(timeserie, start=time[n.train+1], end=time[n.train+n.valid])
   return(results)
 }
-
+# create a matrix of 14 column, each column is a time series create by rolling forward
 all.issues <- sapply(0:(n.sample - 1), function(i) return(separate.train.test(window(issues.ts,start=time[1],end=time[length(issues.ts)-i]), n.valid)))
 all.commits <- sapply(0:(n.sample - 1), function(i) return(separate.train.test(window(commits.ts,start=time[1],end=time[length(commits.ts)-i]), n.valid)))
 
@@ -67,6 +68,8 @@ commits  <- separate.train.test(commits.ts, n.valid)
 ```
 
 ```{r}
+# utility functions
+# all.forecast is a matirx of 21(length of validation period) * 14(14 rolling forward)
 mean.all.accuracy <- function(all.forecast) {
   Reduce("+", all.forecast['summary',])/length(all.forecast['summary',])
 }
@@ -79,7 +82,7 @@ plot.all.residuals <- function(all.forecast) {
 }
 
 plot.all.pred <- function(all.forecast) {
-  plot(issues.ts, main="Prediction",xlim=c(35, 53.3), xlab = 'Week', ylab = 'Number of Issues')
+  plot(issues.ts, main="Prediction", xlim=c(30, 53.3), xlab = 'Week', ylab = 'Number of Issues')
   if (class(all.forecast['pred',1]$pred) == "forecast") {
     sapply(1:n.sample, function(i) lines(all.forecast['pred',i]$pred$mean, col=rgb(0, 0, 1, 0.5)))
   } else {
@@ -88,11 +91,55 @@ plot.all.pred <- function(all.forecast) {
   return(NULL)
 }
 
+plot.pred <- function(forecast.with.interval.ts) {
+  plot(issues.ts, main="Prediction Interval", xlim=c(30, 53.3), xlab = 'Week', ylab = 'Number of Issues')
+  # how to plot shade, why is it not working here...~''
+  apply(forecast.with.interval.ts, 2, function(x) lines(x))
+  return(NULL)
+}
+
 hist.all.residuals <- function(all.forecast) {
   residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
-  boxplot(residuals)
   hist(residuals)
   quantile(residuals,c(0.975,0.95,0.05,0.025))
+}
+
+# plot the boxplot of 21 validation period prediction residuals
+boxplot.all.residuals <- function(all.forecast) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
+  boxplot(apply(residuals, 1, quantile.helper))
+  return (quantile(residuals, c(0.975,0.95,0.05,0.025)))
+}
+
+# retrun the vector of qunatile of 0.975, 0.95, 0.05, 0.025
+quantile.helper <- function(matrix) {
+  return (quantile(matrix, c(0.975, 0.95, 0.05, 0.025)))
+}
+
+# get the quantile of each point prediction
+get.quantile.of.residuals <- function(all.forecast) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
+  return (apply(residuals, 1, quantile.helper))
+}
+
+forecast.confidence <- function(ets.test.model.pred, quantile.of.residuals) {
+  forecast.confidence.interval <- apply(quantile.of.residuals, 1, function(a.quantile) return(a.quantile+ets.test.model.pred))
+  return(forecast.confidence.interval)
+}
+
+forecast.manual.interval <- function(x.train, f.train, f.pred, f.lower, f.upper) {
+  mean <- f.pred
+  x <- x.train
+  residuals <- x.train - f.train
+  fitted <- f.train
+  level <- c(80, 95)
+  lower <- f.lower
+  upper <- f.upper
+  
+  # Construct output list
+  output <- list(mean=mean, x=x, residuals=residuals, fitted=fitted, level=level, lower=lower, upper=upper)
+  # Return with forecasting class
+  return(structure(output, class='forecast'))
 }
 
 # to build custom forecast object
@@ -123,7 +170,6 @@ naive.forecast <- function(sample) {
   results$fitted <- results$pred$fitted
   results$residual <- sample$valid.ts - results$pred$mean
   results$summary <- accuracy(results$pred, sample$valid.ts)
-  
   return(results)
 }
 
@@ -139,6 +185,9 @@ plot.all.residuals(all.naive.forecast)
 ```
 ```{r}
 hist.all.residuals(all.naive.forecast)
+```
+```{r}
+boxplot.all.residuals(all.naive.forecast)
 ```
 
 
@@ -185,11 +234,22 @@ hw.forecast <- function(sample) {
   results$fitted <- results$pred$fitted
   results$residual <- sample$valid.ts - results$pred$mean
   results$summary <- accuracy(results$pred, sample$valid.ts)
-  
   return(results)
 }
 
+
 all.hw.forecast <- sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
+# all.hw.forecast.future <- sapply(1:n.sample, function(i) return( forecast()))
+
+ets.test.model <- ets(issues.ts, model = "ZAA")
+ets.test.model.pred <- forecast(ets.test.model, h=n.valid)
+quantile.of.residuals <- get.quantile.of.residuals(all.hw.forecast)
+# the prediction intrerval of each time stamp
+ets.test.model.pred.confidence.interval <- forecast.confidence(ets.test.model.pred$mean, quantile.of.residuals)
+# convert the prediction interval into time series object
+ets.test.model.pred.confidence.interval.ts <- ts(ets.test.model.pred.confidence.interval, start = c(53, 4), end = c(56, 3), frequency = 7)
+forecast.object <- forecast.manual.interval(x.train=issues.ts, f.train=ets.test.model$fitted, f.pred=ets.test.model.pred$mean, f.lower=ets.test.model.pred.confidence.interval.ts[,1:2], f.upper= ets.test.model.pred.confidence.interval.ts[,3:4])
+
 
 kable(mean.all.accuracy(all.hw.forecast))
 ```
@@ -201,6 +261,10 @@ plot.all.residuals(all.hw.forecast)
 ```
 ```{r}
 hist.all.residuals(all.hw.forecast)
+boxplot.all.residuals(all.hw.forecast)
+# plot the prediction on test period with the prediction interval
+plot(forecast.object, xlim=c(30, 56))
+
 ```
 
 ## Double differencing
@@ -221,8 +285,6 @@ ma.dd.forecast <- function(sample) {
     ma.dd.pred.d1 <- ma.trailing.pred + lag(ma.dd.pred.d1,k = -7)
     ma.dd.pred <- ma.dd.pred.d1 + lag(ma.dd.pred,k = -8)
   }
-  
-  print(ma.dd.pred)
   
   results <- list()
   results$train <- sample$train.ts
@@ -338,7 +400,6 @@ arima.forecast <- function(sample) {
   results$fitted <- results$pred$fitted
   results$residual <- sample$valid.ts - results$pred$mean
   results$summary <- accuracy(results$pred, sample$valid.ts)
-  
   return(results)
 }
 
@@ -357,6 +418,7 @@ hist.all.residuals(all.arima.forecast)
 ```
 
 ## Neural Network
+
 
 ```{r}
 nnetar.forecast <- function(sample) {
