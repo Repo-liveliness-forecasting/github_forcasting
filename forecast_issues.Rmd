@@ -82,7 +82,7 @@ plot.all.residuals <- function(all.forecast) {
 }
 
 plot.all.pred <- function(all.forecast) {
-  plot(issues.ts, main="Prediction", xlim=c(30, 53.3), xlab = 'Week', ylab = 'Number of Issues')
+  plot(issues.ts, main="Prediction", xlim=c(35, 53.3), xlab = 'Week', ylab = 'Number of Issues')
   if (class(all.forecast['pred',1]$pred) == "forecast") {
     sapply(1:n.sample, function(i) lines(all.forecast['pred',i]$pred$mean, col=rgb(0, 0, 1, 0.5)))
   } else {
@@ -92,7 +92,7 @@ plot.all.pred <- function(all.forecast) {
 }
 
 plot.pred <- function(forecast.with.interval.ts) {
-  plot(issues.ts, main="Prediction Interval", xlim=c(30, 53.3), xlab = 'Week', ylab = 'Number of Issues')
+  plot(issues.ts, main="Prediction Interval", xlim=c(35, 53.3), xlab = 'Week', ylab = 'Number of Issues')
   # how to plot shade, why is it not working here...~''
   apply(forecast.with.interval.ts, 2, function(x) lines(x))
   return(NULL)
@@ -101,19 +101,19 @@ plot.pred <- function(forecast.with.interval.ts) {
 hist.all.residuals <- function(all.forecast) {
   residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
   hist(residuals)
-  quantile(residuals,c(0.975,0.95,0.05,0.025))
+  quantile(residuals,c(0.975,0.90,0.10,0.025))
 }
 
 # plot the boxplot of 21 validation period prediction residuals
 boxplot.all.residuals <- function(all.forecast) {
   residuals <- sapply(1:n.sample, function(i) as.numeric(all.forecast['residual',i]$residual))
   boxplot(apply(residuals, 1, quantile.helper))
-  return (quantile(residuals, c(0.975,0.95,0.05,0.025)))
+  return (quantile(residuals, c(0.975,0.90,0.10,0.025)))
 }
 
-# retrun the vector of qunatile of 0.975, 0.95, 0.05, 0.025
+# retrun the vector of qunatile of 0.975, 0.90, 0.10, 0.025
 quantile.helper <- function(matrix) {
-  return (quantile(matrix, c(0.975, 0.95, 0.05, 0.025)))
+  return (quantile(matrix, c(0.975, 0.90, 0.10, 0.025)))
 }
 
 # get the quantile of each point prediction
@@ -219,10 +219,13 @@ plot.all.residuals(all.snaive.forecast)
 ```{r}
 hist.all.residuals(all.snaive.forecast)
 ```
+```{r}
+boxplot.all.residuals(all.snaive.forecast)
+```
 
 # Smoothing
 
-## Exponential smoothing
+## Exponential smoothing ZNA
 
 ```{r}
 hw.forecast <- function(sample) {
@@ -239,17 +242,6 @@ hw.forecast <- function(sample) {
 
 
 all.hw.forecast <- sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
-# all.hw.forecast.future <- sapply(1:n.sample, function(i) return( forecast()))
-
-ets.test.model <- ets(issues.ts, model = "ZAA")
-ets.test.model.pred <- forecast(ets.test.model, h=n.valid)
-quantile.of.residuals <- get.quantile.of.residuals(all.hw.forecast)
-# the prediction intrerval of each time stamp
-ets.test.model.pred.confidence.interval <- forecast.confidence(ets.test.model.pred$mean, quantile.of.residuals)
-# convert the prediction interval into time series object
-ets.test.model.pred.confidence.interval.ts <- ts(ets.test.model.pred.confidence.interval, start = c(53, 4), end = c(56, 3), frequency = 7)
-forecast.object <- forecast.manual.interval(x.train=issues.ts, f.train=ets.test.model$fitted, f.pred=ets.test.model.pred$mean, f.lower=ets.test.model.pred.confidence.interval.ts[,1:2], f.upper= ets.test.model.pred.confidence.interval.ts[,3:4])
-
 
 kable(mean.all.accuracy(all.hw.forecast))
 ```
@@ -261,10 +253,9 @@ plot.all.residuals(all.hw.forecast)
 ```
 ```{r}
 hist.all.residuals(all.hw.forecast)
+```
+```{r}
 boxplot.all.residuals(all.hw.forecast)
-# plot the prediction on test period with the prediction interval
-plot(forecast.object, xlim=c(30, 56))
-
 ```
 
 ## Double differencing
@@ -308,20 +299,15 @@ ma.dd.forecast <- function(sample) {
 all.ma.dd.forecast <- sapply(1:n.sample, function(i) return(ma.dd.forecast(all.issues[,i])))
 
 kable(mean.all.accuracy(all.ma.dd.forecast))
-```
-```{r}
 plot.all.pred(all.ma.dd.forecast)
-```
-```{r}
 plot.all.residuals(all.ma.dd.forecast)
-```
-```{r}
 hist.all.residuals(all.ma.dd.forecast)
+boxplot.all.residuals(all.ma.dd.forecast)
 ```
 
 # Regression
 
-## Linear additive regression
+## Linear additive regression season
 
 ```{r}
 regr.add.forecast <- function(sample) {
@@ -350,13 +336,16 @@ plot.all.residuals(all.regr.add.forecast)
 ```{r}
 hist.all.residuals(all.regr.add.forecast)
 ```
+```{r}
+boxplot.all.residuals(all.regr.add.forecast)
+```
 
 ## linear multiplicative regression
 
 ```{r}
-regr.mult.forecast <- function(sample) {
-  train.ts <- sample$train.ts
-  valid.ts <- sample$valid.ts
+regr.mult.forecast <- function(sample.issues) {
+  train.ts <- sample.issues$train.ts
+  valid.ts <- sample.issues$valid.ts
   train.lm <- tslm(train.ts ~ season, lambda = 0)
   train.lm.pred <- forecast(train.lm, h=n.valid)
   lm.summary <- accuracy(train.lm.pred, valid.ts)
@@ -385,39 +374,12 @@ plot.all.residuals(all.regr.mult.forecast)
 ```
 ```{r}
 hist.all.residuals(all.regr.mult.forecast)
-
-```
-
-## Arima
-
-```{r}
-arima.forecast <- function(sample) {
-  results <- list()
-  results$train <- sample$train.ts
-  results$valid <- sample$valid.ts
-  results$model <- Arima(sample$train.ts, order=c(1,0,0), seasonal=c(1,1,1))
-  results$pred <- forecast(results$model, h=n.valid)
-  results$fitted <- results$pred$fitted
-  results$residual <- sample$valid.ts - results$pred$mean
-  results$summary <- accuracy(results$pred, sample$valid.ts)
-  return(results)
-}
-
-all.arima.forecast <- sapply(1:n.sample, function(i) return(arima.forecast(all.issues[,i])))
-
-kable(mean.all.accuracy(all.arima.forecast))
 ```
 ```{r}
-plot.all.pred(all.arima.forecast)
-```
-```{r}
-plot.all.residuals(all.arima.forecast)
-```
-```{r}
-hist.all.residuals(all.arima.forecast)
+boxplot.all.residuals(all.regr.mult.forecast)
 ```
 
-## Neural Network
+## Neural Network (repeats = 20, p=1, P=1, size=7)
 
 
 ```{r}
@@ -437,18 +399,13 @@ nnetar.forecast <- function(sample) {
 all.nnetar.forecast <- sapply(1:n.sample, function(i) return(nnetar.forecast(all.issues[,i])))
 
 kable(mean.all.accuracy(all.nnetar.forecast))
-```
-```{r}
 plot.all.pred(all.nnetar.forecast)
-```
-```{r}
 plot.all.residuals(all.nnetar.forecast)
-```
-```{r}
 hist.all.residuals(all.nnetar.forecast)
+boxplot.all.residuals(all.nnetar.forecast)
 ```
 
-# External info
+# External info Numerical using regression model
 
 
 ```{r}
@@ -462,7 +419,7 @@ regr.ext.forecast <- function(issues, commits.sample) {
   results <- list()
   results$train <- issues$train.ts
   results$valid <- issues$valid.ts
-  results$model <- tslm(issues$train.ts ~ season + commits_x)
+  results$model <- tslm(issues$train.ts ~ season + trend + commits_x)
   results$pred <- forecast(results$model, h=n.valid, newdata=newdata)
   results$fitted <- results$pred$fitted
   results$residual <- issues$valid.ts - results$pred$mean
@@ -474,18 +431,14 @@ regr.ext.forecast <- function(issues, commits.sample) {
 all.regr.ext.forecast <- sapply(1:n.sample, function(i) return(regr.ext.forecast(all.issues[,i], all.commits[,i])))
 
 kable(mean.all.accuracy(all.regr.ext.forecast))
-```
-```{r}
+
 plot.all.pred(all.regr.ext.forecast)
-```
-```{r}
 plot.all.residuals(all.regr.ext.forecast)
-```
-```{r}
 hist.all.residuals(all.regr.ext.forecast)
+boxplot.all.residuals(all.regr.ext.forecast)
 ```
 
-# Ensemble
+# Ensemble (all.regr.mult.forecast[,i], all.hw.forecast[,i])
 
 
 ```{r}
@@ -521,10 +474,30 @@ ensemble.forecast <- function(list.of.forecast) {
 
 all.ensemble.forecast <- sapply(
   1:n.sample, 
-  function(i) return(ensemble.forecast(list(all.regr.ext.forecast[,i], all.regr.mult.forecast[,i], all.hw.forecast[,i])))
+  function(i) return(ensemble.forecast(list(all.regr.mult.forecast[,i], all.hw.forecast[,i])))
 )
 
 kable(mean.all.accuracy(all.ensemble.forecast))
+
+Acf(all.ensemble.forecast[,1]$residual, lag.max = 14, main = "")
+
+test <- list()
+test$train.ts <- issues.ts
+test$valid.ts <- naive(issues.ts, h=n.valid)$mean
+
+test.forecast <- ensemble.forecast(list(regr.mult.forecast(test), hw.forecast(test)))
+quantile.of.residuals <- get.quantile.of.residuals(all.ensemble.forecast)
+# the prediction intrerval of each time stamp
+test.forecast.confidence.interval <- forecast.confidence(test.forecast$pred$mean, quantile.of.residuals)
+# convert the prediction interval into time series object
+test.forecast.confidence.interval.ts <- ts(test.forecast.confidence.interval, start = c(53, 4), end = c(56, 3), frequency = 7)
+
+forecast.object <- forecast.manual.interval(
+  x.train=issues.ts, 
+  f.train=test.forecast$fitted, 
+  f.pred=test.forecast$pred$mean, 
+  f.lower=test.forecast.confidence.interval.ts[,1:2], 
+  f.upper= test.forecast.confidence.interval.ts[,3:4])
 ```
 ```{r}
 plot.all.pred(all.ensemble.forecast)
@@ -535,4 +508,10 @@ plot.all.residuals(all.ensemble.forecast)
 ```{r}
 hist.all.residuals(all.ensemble.forecast)
 ```
-
+```{r}
+boxplot.all.residuals(all.ensemble.forecast)
+```
+```{r}
+# plot the prediction on test period with the prediction interval
+plot(forecast.object, xlim=c(35, 56))
+```
