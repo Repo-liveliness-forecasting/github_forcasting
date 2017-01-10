@@ -13,8 +13,9 @@ The goal of this experiment is to design the best model to forcaste the number o
 library(forecast)
 library(knitr)
 
-issues.csv <- read.csv('issues/apache_spark.csv')
-issues.csv$date <- as.POSIXlt(as.Date(issues.csv$date, format='%m/%d/%Y'))
+issues.csv <- read.csv('issues/apache_spark_daily.csv')
+issues.csv <- issues.csv[1:(nrow(issues.csv) - 1), ]
+issues.csv$date <- as.POSIXlt(as.Date(issues.csv$date, format='%Y-%m-%d'))
 ```
 
 # Keep the last 12 months data
@@ -39,7 +40,8 @@ n.valid <- 21
 # Time Series Plot
 
 ```{r}
-plot(issues.ts, main = 'Apache Spark', bty = 'l', ylab = 'Number of Issues',
+title <- 'Apache Spark'
+plot(issues.ts, main = title, bty = 'l', ylab = 'Number of Issues',
      xlab = 'Week', xlim = c(0, 54))
 ```
 
@@ -52,7 +54,7 @@ Acf(diff.ts, lag.max = 7, main = 'Apache Spark: Acf on lag-1 difference')
 
 # Forecast functions
 ```{r}
-n.sample <- 14
+n.sample <- 28
 
 separate.train.test <- function(timeseries, n.valid) {
   time <- time(timeseries)
@@ -74,22 +76,30 @@ mean.all.accuracy <- function(all.forecast) {
 
 plot.all.pred <- function(all.forecast, plot.title) {
   plot(issues.ts, main = plot.title, bty = 'l', ylab = 'Number of Issues',
-       xlab = 'Week')
+       xlab = 'Week', xlim = c(30, 53.3))
   if (class(all.forecast['pred', 1]$pred) == 'forecast') {
-    sapply(1:n.sample, function(i) lines(all.forecast['pred', i]$pred$mean, col = 'orange'))
+    sapply(1:n.sample, function(i) lines(all.forecast['pred', i]$pred$mean, col = rgb(0, 0, 1, 0.5)))
   } else {
-    sapply(1:n.sample, function(i) lines(all.forecast['pred', i]$pred, col = 'orange'))
+    sapply(1:n.sample, function(i) lines(all.forecast['pred', i]$pred, col = rgb(0, 0, 1, 0.5)))
   }
   return(NULL)
 }
 
 plot.all.residuals <- function(all.forecast, plot.title) {
-  plot(1, bty = 'l', main = plot.title, xlim = c(0, 54), ylim = c(-40, 40),
+  plot(1, bty = 'l', main = plot.title, xlim = c(30, 53.3), ylim = c(-40, 40),
        xlab = 'Week', ylab = 'Errors')
+  legend(30, 50, c('Train', 'Valid'), lwd = c(1, 2), lty = c(1, 1), col = c('black', 'blue'), bty = 'n')
   sapply(1:n.sample, function(i) lines(
     all.forecast['train', i]$train - all.forecast['fitted', i]$fitted
   ))
-  sapply(1:n.sample, function(i) lines(all.forecast['residual',i]$residual, col = 'orange'))
+  sapply(1:n.sample, function(i) lines(all.forecast['residual',i]$residual, col = 'blue'))
+  return(NULL)
+}
+
+plot.pred <- function(forecast.with.interval.ts, plot.title) {
+  plot(issues.ts, main = plot.title, xlim = c(30, 53.3), xlab = 'Week',
+       ylab = 'Number of Issues')
+  apply(forecast.with.interval.ts, 2, function(x) lines(x))
   return(NULL)
 }
 
@@ -97,9 +107,55 @@ hist.all.residuals <- function(all.forecast, plot.title) {
   residuals <- sapply(1:n.sample, function(i) as.numeric(
     all.forecast['residual', i]$residual
   ))
-  boxplot(residuals, main = plot.title)
   hist(residuals, main = plot.title)
   quantile(residuals, c(0.975, 0.95, 0.05, 0.025))
+}
+
+boxplot.all.residuals <- function(all.forecast, plot.title) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(
+    all.forecast['residual', i]$residual
+  ))
+  boxplot(apply(residuals, 1, quantile.helper), main = plot.title)
+  return (quantile(residuals, c(0.975, 0.95, 0.05, 0.025)))
+}
+
+quantile.helper <- function(matrix) {
+  return (quantile(matrix, c(0.975, 0.95, 0.05, 0.025)))
+}
+
+get.quantile.of.residuals <- function(all.forecast) {
+  residuals <- sapply(1:n.sample, function(i) as.numeric(
+    all.forecast['residual', i]$residual
+  ))
+  return (apply(residuals, 1, quantile.helper))
+}
+
+forecast.confidence <- function(ets.test.model.pred, quantile.of.residuals) {
+  forecast.confidence.interval <- apply(quantile.of.residuals, 1, function(a.quantile) return(a.quantile + ets.test.model.pred))
+  return(forecast.confidence.interval)
+}
+
+forecast.manual.interval <- function(x.train, f.train, f.pred, f.lower, f.upper) {
+  mean <- f.pred
+  x <- x.train
+  residuals <- x.train - f.train
+  fitted <- f.train
+  level <- c(80, 95)
+  lower <- f.lower
+  upper <- f.upper
+  
+  output <- list(mean = mean, x = x, residuals = residuals, fitted = fitted, level = level, lower = lower, upper = upper)
+  return(structure(output, class = 'forecast'))
+}
+
+forecast.manual <- function(x.train, f.train, f.pred) {
+  mean <- f.pred
+  x <- x.train
+  residuals <- x.train - f.train
+  fitted <- f.train
+  
+  output <- list(mean = mean, x = x, residuals = residuals, fitted = fitted)
+  return(structure(output, class = 'forecast'))
 }
 ```
 
@@ -124,9 +180,10 @@ all.naive.forecast <- sapply(1:n.sample, function(i) return(
 ))
 
 kable(mean.all.accuracy(all.naive.forecast))
-plot.all.pred(all.naive.forecast, 'Apache Spark (Naive Forecast)')
-plot.all.residuals(all.naive.forecast, 'Apache Spark (Naive Forecast Residuals)')
-hist.all.residuals(all.naive.forecast, 'Apache Spark (Naive Forecast Residuals)')
+plot.all.pred(all.naive.forecast, paste(title, ' (Naive Forecast)'))
+plot.all.residuals(all.naive.forecast, paste(title, ' (Naive Forecast Residuals)'))
+hist.all.residuals(all.naive.forecast, paste(title, ' (Naive Forecast Residuals)'))
+boxplot.all.residuals(all.naive.forecast, paste(title, ' (Naive Forecast Residuals)'))
 ```
 
 ## Seasonal Naive
@@ -147,11 +204,13 @@ all.snaive.forecast <- sapply(1:n.sample, function(i) return(
   snaive.forecast(all.issues[, i])))
 
 kable(mean.all.accuracy(all.snaive.forecast))
-plot.all.pred(all.snaive.forecast, 'Apache Spark (Seasonal Naive Forecast)')
+plot.all.pred(all.snaive.forecast, paste(title, ' (Seasonal Naive Forecast)'))
 plot.all.residuals(all.snaive.forecast,
-                   'Apache Spark (Seasonal Naive Forecast Residuals)')
+                   paste(title, ' (Seasonal Naive Forecast Residuals)'))
 hist.all.residuals(all.snaive.forecast,
-                   'Apache Spark (Seasonal Naive Forecast Residuals)')
+                   paste(title, ' (Seasonal Naive Forecast Residuals)'))
+boxplot.all.residuals(all.snaive.forecast,
+                   paste(title, ' (Seasonal Naive Forecast Residuals)'))
 ```
 
 # Smoothing
@@ -182,9 +241,10 @@ ma.forecast <- function(sample) {
 all.ma.forecast <- sapply(1:n.sample, function(i) return(ma.forecast(all.issues[, i])))
 
 kable(mean.all.accuracy(all.ma.forecast))
-plot.all.pred(all.ma.forecast, 'Apache Spark (Moving Average)')
-plot.all.residuals(all.ma.forecast, 'Apache Spark (Moving Average Residuals)')
-hist.all.residuals(all.ma.forecast, 'Apache Spark (Moving Average Residuals)')
+plot.all.pred(all.ma.forecast, paste(title, ' (Moving Average)'))
+plot.all.residuals(all.ma.forecast, paste(title, ' (Moving Average Residuals)'))
+hist.all.residuals(all.ma.forecast, paste(title, ' (Moving Average Residuals)'))
+boxplot.all.residuals(all.ma.forecast, paste(title, ' (Moving Average Residuals)'))
 ```
 
 ## Exponential Smoothing
@@ -206,9 +266,10 @@ hw.forecast <- function(sample) {
 all.hw.forecast <- sapply(1:n.sample, function(i) return(hw.forecast(all.issues[,i])))
 
 kable(mean.all.accuracy(all.hw.forecast))
-plot.all.pred(all.hw.forecast, 'Apache Spark (Holt Winter)')
-plot.all.residuals(all.hw.forecast, 'Apache Spark (Holt Winter Residuals)')
-hist.all.residuals(all.hw.forecast, 'Apache Spark (Holt Winter Residuals)')
+plot.all.pred(all.hw.forecast, paste(title, ' (Exponential Smoothing)'))
+plot.all.residuals(all.hw.forecast, paste(title, ' (Exponential Smoothing Residuals)'))
+hist.all.residuals(all.hw.forecast, paste(title, ' (Exponential Smoothing Residuals)'))
+boxplot.all.residuals(all.hw.forecast, paste(title, ' (Exponential Smoothing Residuals)'))
 ```
 
 # Linear Regression
@@ -235,48 +296,72 @@ kable(mean.all.accuracy(all.regr.add.forecast))
 plot.all.pred(all.regr.add.forecast,
               'Apache Spark (Linear Regression Additive Seasonality)')
 plot.all.residuals(all.regr.add.forecast,
-                   'Apache Spark (Linear Regression Additive Seasonality: Residuals)')
+                   paste(title, ' (Linear Regression Additive Seasonality: Residuals)'))
 hist.all.residuals(all.regr.add.forecast,
-                   'Apache Spark (Linear Regression Additive Seasonality: Residuals)')
+                   paste(title, ' (Linear Regression Additive Seasonality: Residuals)'))
+boxplot.all.residuals(all.regr.add.forecast,
+                   paste(title, ' (Linear Regression Additive Seasonality: Residuals)'))
 ```
 
 ## Multiplicative seasonality
 
 ```{r}
-n.train <- length(issues.ts) - n.valid
-train.issues.ts <- window(issues.ts, start = time[1], end = time[n.train])
-valid.issues.ts <- window(issues.ts, start = time[n.train + 1],
-                         end = time[n.train + n.valid])
+regr.mult.forecast <- function(sample) {
+  train.ts <- sample$train.ts
+  valid.ts <- sample$valid.ts
+  train.lm <- tslm(train.ts ~ season, lambda = 0)
+  train.lm.pred <- forecast(train.lm, h=n.valid)
+  lm.summary <- accuracy(train.lm.pred, valid.ts)
 
-train.issues.lm.multiplicative.seasonality <- tslm(train.issues.ts ~ season, lambda = 0)
-train.issues.lm.multiplicative.seasonality.pred <- forecast(
-  train.issues.lm.multiplicative.seasonality, h = n.valid, level = 5)
-plot(train.issues.lm.multiplicative.seasonality.pred, bty = 'l',
-     main = 'Apache Spark (Linear Regression Multiplicative Seasonality)',
-     ylab = 'Number of Issues')
-lines(train.issues.lm.multiplicative.seasonality.pred$fitted, lwd = 2, col = 'blue')
-lines(valid.issues.ts)
+  results <- list()
+  results$train <- train.ts
+  results$valid <- valid.ts
+  results$model <- train.lm
+  results$pred <- train.lm.pred
+  results$fitted <- train.lm.pred$fitted
+  results$residual <- valid.ts - train.lm.pred$mean
+  results$summary <- lm.summary
 
-plot(train.issues.ts - train.issues.lm.multiplicative.seasonality.pred$fitted,
-     main = 'Apache Spark (Linear Regression Multiplicative Seasonality: Residuals)',
-     bty = 'l', xlab = 'Week',
-     ylab = 'Errors', xlim = c(0, 54))
-lines(valid.issues.ts - train.issues.lm.multiplicative.seasonality.pred$mean, lwd = 2,
-      col = 'blue')
-kable(accuracy(train.issues.lm.multiplicative.seasonality.pred, valid.issues.ts))
+  return(results)
+}
+
+all.regr.mult.forecast <- sapply(1:n.sample, function(i) return(
+  regr.mult.forecast(all.issues[, i])))
+
+kable(mean.all.accuracy(all.regr.mult.forecast))
+plot.all.pred(all.regr.mult.forecast,
+              paste(title, ' (Linear Regression Multiplicative Seasonality)'))
+plot.all.residuals(all.regr.mult.forecast,
+                   paste(title, ' (Linear Regression Multiplicative Seasonality: Residuals)'))
+hist.all.residuals(all.regr.mult.forecast,
+                   paste(title, ' (Linear Regression Multiplicative Seasonality: Residuals)'))
+boxplot.all.residuals(all.regr.mult.forecast,
+                   paste(title, ' (Linear Regression Multiplicative Seasonality: Residuals)'))
 ```
 
 # Neural Networks
 
 ```{r}
-issues.nnetar <- nnetar(train.issues.ts)
-issues.nnetar.pred <- forecast(issues.nnetar, h = n.valid)
-accuracy(issues.nnetar.pred, valid.issues.ts)
+nnetar.forecast <- function(sample) {
+  results <- list()
+  results$train <- sample$train.ts
+  results$valid <- sample$valid.ts
+  results$model <- nnetar(sample$train.ts)
+  results$pred <- forecast(results$model, h = n.valid)
+  results$fitted <- results$pred$fitted
+  results$residual <- sample$valid.ts - results$pred$mean
+  results$summary <- accuracy(results$pred, sample$valid.ts)
 
-plot(train.issues.ts, xlim = c(0, 54), bty = 'l')
-lines(issues.nnetar.pred$fitted, lwd = 2, col = 'blue')
-lines(issues.nnetar.pred$mean, lwd = 2, col = 'blue', lty = 2)
-lines(valid.issues.ts)
+  return(results)
+}
+
+all.nnetar.forecast <- sapply(1:n.sample, function(i) return(nnetar.forecast(all.issues[,i])))
+
+kable(mean.all.accuracy(all.nnetar.forecast))
+plot.all.pred(all.nnetar.forecast, paste(title, ' (Neural Networks)'))
+plot.all.residuals(all.nnetar.forecast, paste(title, ' (Neural Networks): Residuals'))
+hist.all.residuals(all.nnetar.forecast, paste(title, ' (Neural Networks): Residuals'))
+boxplot.all.residuals(all.nnetar.forecast, paste(title, ' (Neural Networks): Residuals'))
 ```
 
 # External Info
@@ -350,4 +435,49 @@ lines(valid.issues.ts - stlm.reg.pred$mean, col = 'blue', lwd = 2)
 kable(accuracy(stlm.reg.pred, valid.issues.ts))
 summary(stlm.reg.fit)
 stlm.reg.pred$model
+```
+
+# Ensemble
+
+```{r}
+ensemble.forecast <- function(list.of.forecast) {
+  results <- list()
+  results$train <- list.of.forecast[[1]]$train
+  results$valid <- list.of.forecast[[1]]$valid
+
+  valid.time <- time(results$valid)
+  train.time <- time(results$train)
+
+  mean.pred <- ts(
+    rowMeans(sapply(list.of.forecast, function(forecast) forecast$pred$mean)), 
+    start = start(valid.time), 
+    end = end(valid.time), 
+    frequency = frequency(valid.time))
+
+  mean.fitted <- ts(
+    rowMeans(sapply(list.of.forecast, function(forecast) window(forecast$fitted, start = c(5,3)))), 
+    start = start(train.time), 
+    end = end(train.time), 
+    frequency = frequency(train.time))
+
+  results$pred <- forecast.manual(window(results$train, start=c(5,3)), mean.fitted, mean.pred)
+
+  results$fitted <- results$pred$fitted
+
+  results$residual <- results$valid - results$pred$mean
+  results$summary <- accuracy(results$pred, results$valid)
+
+  return(results)
+}
+
+all.ensemble.forecast <- sapply(
+  1:n.sample, 
+  function(i) return(ensemble.forecast(list(all.regr.mult.forecast[,i], all.hw.forecast[,i])))
+)
+
+kable(mean.all.accuracy(all.ensemble.forecast))
+plot.all.pred(all.ensemble.forecast, paste(title, ' (Ensemble)'))
+plot.all.residuals(all.ensemble.forecast, paste(title, ' (Ensemble): Residuals'))
+hist.all.residuals(all.ensemble.forecast, paste(title, ' (Ensemble): Residuals'))
+boxplot.all.residuals(all.ensemble.forecast, paste(title, ' (Ensemble): Residuals'))
 ```
