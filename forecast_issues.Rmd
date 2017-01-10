@@ -2,7 +2,7 @@
 title: "Forecasting issues"
 author: "Forecast Padawan 2"
 date: "November 17, 2016"
-output: html_document
+output: pdf_document
 ---
 
 The goal of this experiment is to design the best model to forcaste the number of issue in the per day in the comming two weeks. We think that this could help Open Source organisation to manage there human ressources.
@@ -15,7 +15,7 @@ The goal of this experiment is to design the best model to forcaste the number o
 library('forecast')
 library(knitr)
 #load the data frame
-repository.csv <- read.csv("time_series/apache_spark_daily.csv")
+repository.csv <- read.csv("time_series/tensorflow_tensorflow_daily.csv")
 
 repository.csv$date = as.POSIXlt(as.Date(repository.csv$date,format='%Y-%m-%d'))
 ```
@@ -40,7 +40,7 @@ Acf(issues.ts, lag.max = 14, main = "")
 commits.ts <- ts(repository.csv$number_of_commits, frequency = 7) 
 pull_requests.ts <- ts(repository.csv$number_of_pull_requests, frequency = 7) 
 
-plot(issues.ts, main = 'Issues', bty = 'l', ylab = 'Number of Issues')
+plot(issues.ts, main = 'TensorFlow Issues', bty = 'l', ylab = 'Number of Issues')
 plot(commits.ts, main = 'Commits', bty = 'l', ylab = 'Number of Commits')
 ```
 
@@ -225,14 +225,14 @@ boxplot.all.residuals(all.snaive.forecast)
 
 # Smoothing
 
-## Exponential smoothing ZNA
+## Exponential smoothing ZMM
 
 ```{r}
 hw.forecast <- function(sample) {
   results <- list()
   results$train <- sample$train.ts
   results$valid <- sample$valid.ts
-  results$model <- ets(sample$train.ts, model = "ZNA")
+  results$model <- ets(sample$train.ts, model = "ZMM")
   results$pred <- forecast(results$model, h=n.valid)
   results$fitted <- results$pred$fitted
   results$residual <- sample$valid.ts - results$pred$mean
@@ -314,7 +314,7 @@ regr.add.forecast <- function(sample) {
   results <- list()
   results$train <- sample$train.ts
   results$valid <- sample$valid.ts
-  results$model <- tslm(sample$train.ts ~ season)
+  results$model <- tslm(sample$train.ts ~ season + trend)
   results$pred <- forecast(results$model, h=n.valid)
   results$fitted <- results$pred$fitted
   results$residual <- sample$valid.ts - results$pred$mean
@@ -346,7 +346,7 @@ boxplot.all.residuals(all.regr.add.forecast)
 regr.mult.forecast <- function(sample.issues) {
   train.ts <- sample.issues$train.ts
   valid.ts <- sample.issues$valid.ts
-  train.lm <- tslm(train.ts ~ season, lambda = 0)
+  train.lm <- tslm(train.ts ~ season + trend, lambda = 0)
   train.lm.pred <- forecast(train.lm, h=n.valid)
   lm.summary <- accuracy(train.lm.pred, valid.ts)
   
@@ -513,5 +513,5 @@ boxplot.all.residuals(all.ensemble.forecast)
 ```
 ```{r}
 # plot the prediction on test period with the prediction interval
-plot(forecast.object, xlim=c(35, 56))
+plot(forecast.object, xlim=c(35, 56), main = 'TensorFlow Forecasted No. of issues')
 ```
